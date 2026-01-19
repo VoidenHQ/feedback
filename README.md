@@ -11,6 +11,10 @@ Use this repository to:
 
 We might not respond with an echo... but we *are* listening.
 
+Join the discussion on discord : https://discord.com/invite/XSYCf7JF4F
+
+Follow us on X : https://x.com/VoidenMD
+
 ## Getting Started
 
 ### 1. Found a bug?
