@@ -28,25 +28,35 @@
 ### 📦 Download  
 **Version 1.1.0 is now available!**
 
-####  Windows  [Download ↗️](https://voiden.md/api/download/stable/win32/x64/setup-latest.exe)
+👉 **[Download Voiden ↗️](https://voiden.md/download)**  
 
-####  macOS  
-- **Intel (x64)**: [Download ↗️](https://voiden.md/api/download/stable/win32/x64/voiden.dmg)  
-- **Apple Silicon (ARM64)**: [Download ↗️](https://voiden.md/api/download/stable/darwin/arm64/voiden.dmg)
+The website will automatically detect your operating system and highlight the correct installer for you.
+(Windows, macOS Intel/Apple Silicon, and Linux).
 
-####  Linux  
-- **DEB**: [Download ↗️](https://voiden.md/api/download/beta/linux/x64/voiden_1.1.0_amd64.deb)  
-- **RPM**: [Download ↗️](https://voiden.md/api/download/beta/linux/x64/voiden-1.1.0-1.x86_64.rpm)  
-- **AppImage**: [Download ↗️](https://voiden.md/api/download/beta/linux/x64/Voiden-1.1.0.AppImage)
+
+>🔧 Looking for the **beta** builds?  [Download beta versions ↗️](https://voiden.md/download#beta)
+
+## Getting Started
+
+### 1. Found a bug?
+
+Head over to the [Issues](https://github.com/voidenhq/feedback/issues) tab and click **"New issue"**. Use the **Bug report** template to give us everything we need to fix it.
+
+### 2. Have a feature idea?
+
+We love hearing about new possibilities. Use the **Feature request** template to tell us what you have in mind.
+
+### 3. Just want to say something?
+
+Open a general issue or leave a note.
 
 ---
 
-🔧 Looking for the **beta** builds?  
-[Download beta versions ↗️](https://voiden.md/download#beta)
+Thanks for sharing your thoughts with us 💜
 
+---
 
-
-## Quick Start
+## Quick Start (Local Development)
 
 ### Prerequisites
 
