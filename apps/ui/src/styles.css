@@ -1,0 +1,690 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Table cell styling - applied via CSS instead of HTMLAttributes to preserve selection */
+.ProseMirror td {
+  @apply first:border-l-0 last:border-r-0 border-b-0 p-1 px-2 align-middle h-6 border relative box-border text-sm overflow-hidden max-w-full break-all overflow-visible w-full;
+  background-color: var(--editor-bg);
+}
+
+/* Local Fonts - Embedded for performance and offline support */
+
+/* Geist (UI Font) */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-variable.woff2') format('woff2-variations');
+}
+
+/* Geist Mono (Code Font) */
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-mono-variable.woff2') format('woff2-variations');
+}
+
+/* Inconsolata (Default Code Font) */
+@font-face {
+  font-family: 'Inconsolata';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('/fonts/inconsolata-variable.woff2') format('woff2-variations');
+}
+
+/* JetBrains Mono (Code Font Option) */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-variable.woff2') format('woff2-variations');
+}
+
+/* Fira Code (Code Font Option with Ligatures) */
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/fira-code-variable.woff2') format('woff2-variations');
+}
+
+@layer base {
+  :root {
+    /* Base Font Settings (User Configurable) */
+    --font-size-base: 0.9375rem; /* 15px - default value, better for cross-platform readability */
+    --font-family-base: "Inconsolata", monospace; /* default value */
+
+    /* Typography Scale - Relative to base font size for proper scaling */
+    /* Using calc() to scale proportionally with --font-size-base */
+    --font-size-xs: calc(var(--font-size-base) * 0.85);   /* 85% of base */
+    --font-size-sm: calc(var(--font-size-base) * 0.93);   /* 93% of base */
+    --font-size-lg: calc(var(--font-size-base) * 1.067);  /* 106.7% of base */
+    --font-size-xl: calc(var(--font-size-base) * 1.133);  /* 113.3% of base */
+    --font-size-2xl: calc(var(--font-size-base) * 1.267); /* 126.7% of base */
+    --font-size-3xl: calc(var(--font-size-base) * 1.4);   /* 140% of base */
+    --font-size-4xl: calc(var(--font-size-base) * 1.533); /* 153.3% of base */
+
+    /* Heading Settings - Compact spacing like Cursor/terminals */
+    --heading-font-weight: 500; /* medium - easier on eyes */
+    --heading-letter-spacing: 0; /* normal - monospace doesn't need adjustment */
+    --heading-margin-top: 0.25rem; /* 4px - tight like code editors */
+    --heading-margin-bottom: 0.25rem; /* 4px - minimal spacing */
+    --heading-line-height: 1.2; /* compact like code */
+
+    /* Paragraph Settings - Compact like terminals */
+    --paragraph-margin-bottom: 0.25rem; /* 4px - minimal gap */
+    --paragraph-line-height: 1.4; /* terminal-like spacing */
+
+    /* Font Weights */
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* Letter Spacing */
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.025em;
+    --letter-spacing-wider: 0.05em;
+
+    /* Variable Highlighting - Default values (overridden by themes) */
+    --variable-valid-bg: rgba(52, 211, 153, 0.2);
+    --variable-valid-fg: rgb(110, 231, 183);
+    --variable-invalid-bg: rgba(248, 113, 113, 0.2);
+    --variable-invalid-fg: rgb(252, 165, 165);
+    --variable-faker-bg: rgba(34, 211, 238, 0.2);
+    --variable-faker-fg: rgb(103, 232, 249);
+
+    /* ========================================
+       SIMPLIFIED THEME SYSTEM ALIASES
+       Backwards compatibility mappings for legacy variable names
+       These map old 95-variable system → new 45-variable system
+       ======================================== */
+
+    /* Base color aliases */
+    --ui-bg: var(--bg-primary, #1f2430);
+    --editor-bg: var(--bg-primary, #1f2430);
+    --code-bg: var(--bg-primary, #1f2430);
+    --modal-bg: var(--bg-primary, #1f2430);
+    --titlebar-bg: var(--bg-primary, #1f2430);
+
+    --ui-panel-bg: var(--bg-secondary, #1c212b);
+    --modal-header-bg: var(--bg-secondary, #1c212b);
+    --block-header-bg: var(--bg-secondary, #1c212b);
+
+    --editor-fg: var(--fg-primary, #a9b7c6);
+    --ui-fg: var(--fg-primary, #a9b7c6);
+    --code-fg: var(--fg-primary, #a9b7c6);
+    --titlebar-fg: var(--fg-primary, #a9b7c6);
+
+    --icon-secondary: var(--fg-secondary, #707a8c);
+
+    --ui-line: var(--border, #171b24);
+    --ui-border-subtle: var(--border, #171b24);
+    --ui-border-subtle-light: var(--border, #171b24);
+    --menu-separator: var(--border, #171b24);
+
+    --editor-selection: var(--selection, #409fff40);
+    --code-selection: var(--selection, #409fff40);
+    --ui-selection-normal: var(--selection, #409fff40);
+
+    /* Semantic color aliases - Success */
+    --icon-success: var(--success, #87d96c);
+    --status-success: var(--success, #87d96c);
+    --vcs-added: var(--success, #87d96c);
+    --http-get: var(--success, #87d96c);
+    --test-passed-fg: var(--success, #87d96c);
+    --test-passed-bg: var(--success-bg, rgba(135, 217, 108, 0.2));
+
+    /* Semantic color aliases - Error */
+    --icon-error: var(--error, #f27983);
+    --status-error: var(--error, #f27983);
+    --vcs-removed: var(--error, #f27983);
+    --http-delete: var(--error, #f27983);
+    --test-failed-fg: var(--error, #f27983);
+    --test-failed-bg: var(--error-bg, rgba(242, 121, 131, 0.2));
+
+    /* Semantic color aliases - Warning */
+    --icon-warning: var(--warning, #ffd173);
+    --status-warning: var(--warning, #ffd173);
+    --http-put: var(--warning, #ffd173);
+    --http-patch: var(--warning, #ffd173);
+    --placeholder-fg: var(--warning, #ffd173);
+    --placeholder-border: var(--warning, #ffd173);
+    --highlight-search: var(--warning, rgba(255, 209, 115, 0.4));
+    --highlight-search-current: var(--warning, rgba(255, 173, 102, 0.7));
+
+    /* Semantic color aliases - Info */
+    --icon-info: var(--info, #73d0ff);
+    --status-info: var(--info, #73d0ff);
+    --http-post: var(--info, #73d0ff);
+    --vcs-modified: var(--info, #73d0ff);
+
+    /* Accent color aliases */
+    --icon-primary: var(--accent, #ffcc66);
+    --menu-hover-bg: var(--accent, #ffcc66);
+    --placeholder-bg: var(--accent, rgba(255, 173, 102, 0.05));
+
+    --button-primary-bg: var(--accent-alt, #3fa3d9);
+    --button-primary-hover: var(--accent-alt, #2e8fcc);
+
+    /* Button aliases */
+    --button-secondary: var(--bg-secondary, #1c212b);
+    --button-secondary-bg: var(--bg-secondary, #1c212b);
+    --button-secondary-fg: var(--fg-primary, #a9b7c6);
+    --button-danger-bg: var(--error, #f27983);
+    --button-danger-hover: var(--error, #d95965);
+
+    /* Blockquote aliases */
+    --blockquote-border: var(--accent, #ffcc66);
+    --blockquote-bg: var(--bg-secondary, #1c212b);
+    --blockquote-fg: var(--fg-secondary, #707a8c);
+
+    /* Badge aliases - using semantic colors */
+    --badge-core-bg: rgba(var(--accent-rgb, 255 204 102), 0.1);
+    --badge-core-border: rgba(var(--accent-rgb, 255 204 102), 0.3);
+    --badge-core-fg: var(--accent, #ffcc66);
+
+    --badge-official-bg: rgba(var(--info-rgb, 115 208 255), 0.1);
+    --badge-official-border: rgba(var(--info-rgb, 115 208 255), 0.3);
+    --badge-official-fg: var(--info, #73d0ff);
+
+    --badge-community-bg: rgba(var(--warning-rgb, 255 209 115), 0.1);
+    --badge-community-border: rgba(var(--warning-rgb, 255 209 115), 0.3);
+    --badge-community-fg: var(--warning, #ffd173);
+
+    /* Git branch color aliases - generate from accent */
+    --git-branch-1: var(--info, #73d0ff);
+    --git-branch-2: var(--success, #87d96c);
+    --git-branch-3: var(--accent, #ffcc66);
+    --git-branch-4: var(--warning, #ffd173);
+    --git-branch-5: var(--accent-alt, #3fa3d9);
+    --git-branch-6: var(--error, #f27983);
+    --git-branch-7: var(--accent, #ffcc66);
+    --git-branch-8: var(--success, #87d96c);
+
+    /* Misc aliases */
+    --ui-overlay-bg: rgba(0, 0, 0, 0.4);
+    --ui-shadow: rgba(0, 0, 0, 0.3);
+    --menu-bg: var(--bg-secondary, #1c212b);
+    --editor-findMatch: var(--warning, #ffd173);
+    --editor-gutter-active: var(--fg-primary, #a9b7c6);
+    --editor-gutter-normal: var(--fg-secondary, #707a8c);
+    --code-line-highlight: var(--bg-secondary, #1c212b);
+    --code-gutter: var(--fg-secondary, #707a8c);
+    --vcs-ignored: var(--fg-secondary, #707a8c);
+
+    /* Common accent in RGB format for opacity */
+    --common-accent: var(--accent-rgb, 255 204 102);
+    --common-alt: var(--accent-alt-rgb, 63 163 217);
+  }
+
+  /* Apply font settings globally */
+  html, body, #app {
+    background-color: var(--editor-bg);
+  }
+
+  body {
+    font-size: var(--font-size-base);
+    font-family: var(--font-family-base);
+    line-height: var(--paragraph-line-height);
+    /* Better font rendering across platforms */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Slightly heavier font weight for better readability on Windows/Linux */
+    font-weight: 450;
+    overflow: hidden;
+  }
+
+  /* Global heading styles */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: var(--heading-font-weight);
+    letter-spacing: var(--heading-letter-spacing);
+    line-height: var(--heading-line-height);
+    margin-top: var(--heading-margin-top);
+    margin-bottom: var(--heading-margin-bottom);
+  }
+
+  h1 { font-size: var(--font-size-4xl); }
+  h2 { font-size: var(--font-size-3xl); }
+  h3 { font-size: var(--font-size-2xl); }
+  h4 { font-size: var(--font-size-xl); }
+
+  p {
+    margin-bottom: var(--paragraph-margin-bottom);
+    line-height: var(--paragraph-line-height);
+  }
+
+  :root {
+    .drag {
+      -webkit-app-region: drag;
+    }
+    .no-drag {
+      -webkit-app-region: no-drag;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      /* IE and Edge */
+      scrollbar-width: none;
+      /* Firefox */
+    }
+
+    /* Chrome, Safari and Opera */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Custom CSS Needed for TipTap PlaceHolder */
+    .ProseMirror p.is-editor-empty:first-child::before {
+      content: attr(data-placeholder);
+      float: left;
+      height: 0;
+      pointer-events: none;
+    }
+
+    .tiptap .is-empty::before {
+      color: var(--syntax-comment);
+      @apply content-[attr(data-placeholder)];
+      @apply float-left;
+      @apply pointer-events-none;
+      @apply h-0;
+    }
+
+    /* table selection */
+    .selectedCell {
+      background-color: var(--table-cell-selection) !important;
+    }
+
+    .tiptap table .selectedCell:after {
+      z-index: 2;
+      position: absolute;
+      content: "";
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      background-color: var(--table-cell-selection);
+      border: 2px solid var(--table-cell-selection);
+      pointer-events: none;
+    }
+
+    /* Styling for Tiptap blockquotes */
+    .tiptap blockquote {
+      border-left: 4px solid var(--blockquote-border);
+      background-color: var(--blockquote-bg);
+      padding: 10px 10px; /* Inner spacing */
+      margin-left: 10px;
+      margin-right: 100px;
+      /* font-size: large; */
+      color: var(--blockquote-fg);
+      border-radius: 4px; /* Rounded corners */
+    }
+    /* voiden windows only */
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+  }
+}
+
+.text-base {
+  font-size: var(--font-size-base) !important;
+  font-family: var(--font-family-base) !important;
+}
+
+.find-highlight {
+  background-color: var(--highlight-search);
+}
+
+.cm-panels.cm-panels-top {
+  position: sticky;
+  top: 0;
+  margin-top: -31px;
+}
+
+.txt-editor .cm-panels.cm-panels-top {
+  background-color: var(--ui-panel-bg);
+  width: 540px;
+  margin-left: auto;
+  padding: 8px;
+}
+
+.txt-editor .cm-searchMatch {
+  background-color: var(--highlight-search);
+}
+
+.txt-editor .cm-searchMatch-selected {
+  background-color: var(--highlight-search-current);
+}
+
+.txt-editor .cm-search {
+  input.cm-textfield {
+    height: 36px;
+    width: 240px;
+    font-size: 0.75rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    border-radius: 6px;
+    outline: none;
+    border-color: var(--ui-line);
+  }
+}
+
+.txt-editor .cm-button[name="next"],
+.txt-editor .cm-button[name="prev"] {
+  font-size: 0;
+  line-height: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-fg);
+  margin-right: 8px !important;
+}
+
+.txt-editor .cm-button[name="replace"],
+.txt-editor .cm-button[name="replaceAll"] {
+  background: none;
+  border: none;
+  padding: 0;
+  padding: 4px 8px;
+  border-radius: 0.25rem;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-fg);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.txt-editor .cm-panel.cm-search [name="close"] {
+  background: none;
+  border: none;
+  padding: 0;
+  padding: 4px 8px;
+  border-radius: 0.25rem;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-fg);
+  font-size: 0;
+  text-transform: capitalize;
+  top: 12px;
+}
+
+.txt-editor .cm-panel.cm-search [name="close"]::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: var(--button-secondary-fg);
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>")
+    no-repeat center / contain;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>")
+    no-repeat center / contain;
+}
+
+.txt-editor .cm-button[name="select"] {
+  display: none;
+}
+
+.txt-editor .cm-button[name="next"]::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: var(--button-secondary-fg);
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 5v14'/><path d='m19 12-7 7-7-7'/></svg>")
+    no-repeat center / contain;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 5v14'/><path d='m19 12-7 7-7-7'/></svg>")
+    no-repeat center / contain;
+}
+
+.txt-editor .cm-button[name="prev"]::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: var(--button-secondary-fg);
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m5 12 7-7 7 7'/><path d='M12 19V5'/></svg>")
+    no-repeat center / contain;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m5 12 7-7 7 7'/><path d='M12 19V5'/></svg>")
+    no-repeat center / contain;
+}
+
+.txt-editor label {
+  position: relative;
+  font-size: 0 !important;
+  cursor: pointer;
+}
+
+.txt-editor label input[name="case"],
+.txt-editor label input[name="word"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  margin-right: 8px !important;
+}
+.txt-editor label input[name="re"] {
+  display: none;
+}
+
+.txt-editor .cm-search label:has(input[name="case"])::after {
+  content: "Aa";
+  display: inline-block;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: var(--ui-panel-bg);
+  color: var(--ui-fg);
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  margin-right: 8px !important;
+}
+
+.txt-editor label:has(input[name="case"]:checked)::after {
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-fg);
+}
+
+.txt-editor .cm-search label:has(input[name="word"])::after {
+  content: "W";
+  display: inline-block;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: var(--ui-panel-bg);
+  color: var(--ui-fg);
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+
+.txt-editor label:has(input[name="word"]:checked)::after {
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-fg);
+}
+
+.txt-editor .cm-searchPanel label:has(input[name="case"]) {
+  font-size: 0 !important;
+}
+
+.hide-scrollbar {
+  /* Firefox */
+  scrollbar-width: none;
+  /* IE 10+ */
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  /* WebKit */
+  display: none;
+}
+
+/* Variable Highlighting Classes - Theme-aware */
+.variable-highlight-valid {
+  background-color: var(--variable-valid-bg);
+  color: var(--variable-valid-fg);
+}
+
+.variable-highlight-invalid {
+  background-color: var(--variable-invalid-bg);
+  color: var(--variable-invalid-fg);
+}
+
+.variable-highlight-faker {
+  background-color: var(--variable-faker-bg);
+  color: var(--variable-faker-fg);
+}
+
+/* Websocket Send Button Cursor Styles */
+
+#ws-button,
+#ws-button * {
+  cursor: pointer !important;
+}
+
+#ws-button.cursor-not-allowed,
+#ws-button.cursor-not-allowed * {
+  cursor: not-allowed !important;
+}
+
+/* Universal Checkbox Styling */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--editor-gutter-normal);
+  border-radius: 3px;
+  background-color: var(--editor-bg);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--icon-primary);
+  background-color: var(--ui-selection-normal);
+}
+
+input[type="checkbox"]:checked {
+  background-color: rgb(var(--common-accent)/0.6 );
+  border-color: var(--icon-primary);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:indeterminate {
+  background-color: var(--icon-primary);
+  border-color: var(--icon-primary);
+}
+
+input[type="checkbox"]:indeterminate::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 8px;
+  height: 2px;
+  background-color: white;
+  border-radius: 1px;
+}
+
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--icon-primary-alpha);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom scrollbar for code editor container - using theme variables */
+#code-editor-container {
+  /* Show scrollbar only when scrolling */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+#code-editor-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+#code-editor-container::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 2px;
+}
+
+#code-editor-container::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+/* Show scrollbar when hovering over container */
+#code-editor-container:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Brighter when hovering directly over scrollbar */
+#code-editor-container::-webkit-scrollbar-thumb:hover {
+  background-color: var(--editor-gutter-active);
+}
+
+/* Full opacity when actively dragging */
+#code-editor-container::-webkit-scrollbar-thumb:active {
+  background-color: var(--icon-primary);
+}
+
+/* Firefox - overlay scrollbar that auto-hides */
+#code-editor-container {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+#code-editor-container:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}

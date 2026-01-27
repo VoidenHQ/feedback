@@ -1,0 +1,59 @@
+{
+  "name": "voiden-root",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "yarn@4.3.1",
+  "scripts": {
+    "prepare": "node -e \"try { require('husky').install() } catch (e) {if (e.code !== 'MODULE_NOT_FOUND') throw e}\"",
+    "dev:shared": "npx tsc -p apps/shared --watch",
+    "dev": "npx tsc -p apps/backend && node --env-file=.env apps/backend/dist/index.js",
+    "build:shared": "npx tsc -p apps/shared",
+    "start": "NODE_ENV=production node apps/backend/out/index.js",
+    "start:local": "node --env-file=.env apps/backend/out/index.js",
+    "knip": "knip",
+    "test": "vitest",
+    "test:ui": "yarn workspace voiden-ui test"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^1.1.0",
+    "@eslint/js": "^9.6.0",
+    "@testing-library/dom": "^10.4.1",
+    "@types/node": "^20.14.10",
+    "dependency-cruiser": "^16.3.6",
+    "eslint": "^9.6.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.34.3",
+    "globals": "^15.8.0",
+    "husky": "^8.0.3",
+    "knip": "^5.25.2",
+    "lint-staged": "^15.2.0",
+    "prettier": "3.3.2",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^7.16.0",
+    "use-resize-observer": "^9.1.0",
+    "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{js,css,md, tsx, ts}": "prettier --write",
+    "**/*.{js,jsx,ts,tsx}": [
+      "bash -c tsc --noEmit"
+    ]
+  },
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*",
+      "core-extensions"
+    ]
+  },
+  "dependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@radix-ui/react-context-menu": "^2.2.12",
+    "@testing-library/react": "^16.3.1",
+    "fp-ts": "^2.16.9",
+    "remark-gfm": "^4.0.1",
+    "testing-library": "^0.0.2"
+  }
+}

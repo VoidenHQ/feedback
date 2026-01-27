@@ -1,0 +1,514 @@
+import React, { useState, useEffect, useRef } from "react";
+import { useGetPanelTabs, useGetTabContent, useAddPanelTab, useActivateTab } from "@/core/layout/hooks";
+import { CodeEditor } from "@/core/editors/code/CodeEditor";
+import { ExtensionDetails } from "@/core/extensions/components/ExtensionDetails";
+import { VoidenEditor } from "@/core/editors/voiden/VoidenEditor";
+import { SettingsContent } from "@/core/settings/components/SettingsContent";
+import { usePluginStore } from "@/plugins";
+import { TerminalManager } from "@/core/terminal/components/TerminalManager";
+import WelcomeScreen from "@/core/screens/WelcomeScreen";
+import SettingsScreen from "@/core/screens/SettingsScreen";
+import logo from "@/assets/logo-dark.png";
+import ChangeLogScreen from "@/core/screens/ChangeLogScreen";
+import { useCodeEditorStore } from "@/core/editors/code/CodeEditorStore";
+import { Settings, Menu } from "lucide-react";
+import { Kbd } from "@/core/components/ui/kbd";
+import { ErrorBoundary } from "@/core/components/ErrorBoundary";
+import { DiffViewer } from "@/core/git/components/DiffViewer";
+
+// TypeScript interface for md-preview plugin helpers
+interface MdPreviewHelpers {
+  useMdViewStore: (selector: (state: any) => any) => any;
+  Preview: React.ComponentType<{ tab: any; className?: string }>;
+}
+
+// Helper to access md-preview plugin helpers dynamically
+const getMdPreviewHelpers = (): MdPreviewHelpers | undefined => {
+  if (typeof window !== 'undefined' && window.__voidenHelpers__) {
+    return window.__voidenHelpers__['md-preview'] as MdPreviewHelpers;
+  }
+  return undefined;
+};
+
+// Action menu component for .void files
+const ActionMenu = ({ actionsToDisplay, tab, voidenEditorRef }: { actionsToDisplay: any[]; tab: any; voidenEditorRef?: React.MutableRefObject<any> }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+  if (actionsToDisplay.length === 0) {
+    return null;
+  }
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-1.5 hover:bg-active rounded transition-colors"
+        title="Actions"
+      >
+        <Menu className="w-4 h-4" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-48 bg-panel border border-border shadow-lg z-50 overflow-hidden">
+          {actionsToDisplay.map((action) => {
+            const ActionComponent = action.component;
+            if (!ActionComponent || typeof ActionComponent !== 'function') {
+              return null;
+            }
+            return (
+              <div
+                key={action.id}
+                className="px-2 py-1 hover:bg-active text-text cursor-pointer flex items-center gap-2 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ActionComponent tab={tab} voidenEditorRef={voidenEditorRef} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const EmptyPanel = () => {
+  const { mutate: addPanelTab } = useAddPanelTab();
+  const { mutate: activateTab } = useActivateTab();
+  const { data: mainTabs } = useGetPanelTabs("main");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [availableHeight, setAvailableHeight] = useState<number>(0);
+
+  // Measure available height
+  useEffect(() => {
+    const updateHeight = () => {
+      if (containerRef.current) {
+        setAvailableHeight(containerRef.current.clientHeight);
+      }
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+
+  const handleOpenSettings = () => {
+    const existing = mainTabs?.tabs?.find((t: any) => t.type === "settings");
+    if (existing) {
+      activateTab({ panelId: "main", tabId: existing.id });
+      return;
+    }
+
+    addPanelTab({
+      panelId: "main",
+      tab: { id: crypto.randomUUID(), type: "settings", title: "Settings", source: null },
+    });
+  };
+
+  const shortcuts = [
+    {
+      title: "New Voiden file",
+      shortcut: "⌘N",
+      priority: 1,
+    },
+    {
+      title: "Open folder",
+      shortcut: "⌘O",
+      priority: 1,
+    },
+    {
+      title: "Quick open file",
+      shortcut: "⌘P",
+      priority: 1,
+    },
+    {
+      title: "Open recent",
+      shortcut: "⌥⌘O",
+      priority: 2,
+    },
+    {
+      title: "Command palette",
+      shortcut: "⌘⇧P",
+      priority: 2,
+    },
+    {
+      title: "Toggle File Explorer",
+      shortcut: "⌘⇧E",
+      priority: 3,
+    },
+    {
+      title: "Toggle Terminal",
+      shortcut: "⌘J",
+      priority: 3,
+    },
+    {
+      title: "Open Search",
+      shortcut: "⇧⌘F",
+      priority: 3,
+    },
+  ];
+
+  // Determine what to show based on height
+  // Logo alone needs ~180px
+  // Logo + priority 1 (3 items) needs ~350px
+  // Logo + priority 1-2 (5 items) needs ~450px
+  // Logo + all shortcuts (8 items) needs ~550px
+  // Everything needs ~750px
+  const showPriority1 = availableHeight >= 350;
+  const showPriority2 = availableHeight >= 450;
+  const showPriority3 = availableHeight >= 550;
+  const showCustomization = availableHeight >= 750;
+
+  return (
+    <div ref={containerRef} className="flex items-center justify-center h-full w-full text-comment overflow-auto">
+      <div className="w-full max-w-md p-4 sm:p-6">
+        {/* Logo - Always visible */}
+        <div className="mb-4 sm:mb-8 text-center">
+          <h1 className="text-2xl font-light mb-2 w-full flex items-center justify-center">
+            <img src={logo} className="w-32 sm:w-40 h-fit" alt="Voiden Logo" />
+          </h1>
+        </div>
+
+        {/* Shortcuts - Progressive rendering based on height */}
+        {showPriority1 && (
+          <div className="space-y-2 sm:space-y-3">
+            {/* Priority 1 shortcuts */}
+            {shortcuts
+              .filter((item) => item.priority === 1)
+              .map((item, index) => (
+                <div key={index} className="w-full flex items-center justify-between">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-sm sm:text-base">{item.title}</span>
+                    <Kbd keys={item.shortcut} size="md" />
+                  </div>
+                </div>
+              ))}
+
+            {/* Priority 2 shortcuts */}
+            {showPriority2 && shortcuts
+              .filter((item) => item.priority === 2)
+              .map((item, index) => (
+                <div key={index} className="w-full flex items-center justify-between">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-sm sm:text-base">{item.title}</span>
+                    <Kbd keys={item.shortcut} size="md" />
+                  </div>
+                </div>
+              ))}
+
+            {/* Priority 3 shortcuts */}
+            {showPriority3 && shortcuts
+              .filter((item) => item.priority === 3)
+              .map((item, index) => (
+                <div key={index} className="w-full flex items-center justify-between">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-sm sm:text-base">{item.title}</span>
+                    <Kbd keys={item.shortcut} size="md" />
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {/* Customization Section */}
+        {showCustomization && (
+          <div className="mt-4 sm:mt-6 border border-border rounded-lg p-3 sm:p-4 bg-bg/30">
+            <div className="flex items-start gap-3">
+              <Settings className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-sm mb-2">Customize Your Experience</h3>
+                <p className="text-comment text-xs mb-3">
+                  Adjust font size, choose your preferred theme, and personalize your workspace.
+                  <button
+                    onClick={handleOpenSettings}
+                    className="text-accent hover:underline ml-1 font-medium"
+                  >
+                    Open Settings
+                  </button>
+                </p>
+                <div className="space-y-1 text-xs text-comment">
+                  <div className="flex items-start gap-2">
+                    <span className="text-accent text-xs">•</span>
+                    <span><span className="font-medium">Font Size:</span> Increase or decrease base font size (14-16px)</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-accent text-xs">•</span>
+                    <span><span className="font-medium">Font Family:</span> Inconsolata, JetBrains Mono, Fira Code, Geist Mono</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-accent text-xs">•</span>
+                    <span><span className="font-medium">Theme:</span> Switch between different color schemes</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PanelContentInner = ({ panelId }: { panelId: string }) => {
+  const { data: tabContent } = useGetTabContent(panelId);
+  const panel = usePluginStore((state) => state.panels[panelId]);
+  const { data: tabs } = useGetPanelTabs(panelId);
+  const editorActions = usePluginStore((state) => state.editorActions);
+  const activeEditor = useCodeEditorStore((state) => state.activeEditor);
+
+  // Get md-preview helpers dynamically if plugin is loaded
+  // IMPORTANT: Only call the hook if it exists to prevent crashes during plugin reload
+  const mdPreviewHelpers = getMdPreviewHelpers();
+
+  // Default to "edit" mode and use the helper hook only if available
+  // We wrap the hook call in a try-catch and check existence to handle plugin reload gracefully
+  let viewMode = "edit";
+
+  if (mdPreviewHelpers?.useMdViewStore) {
+    try {
+      // Call the Zustand hook from the plugin
+      viewMode = mdPreviewHelpers.useMdViewStore((state: any) => state?.viewMode) || "edit";
+    } catch (error) {
+      // If hook fails during plugin reload, silently default to edit mode
+      console.warn('[PanelContent] md-preview hook unavailable, defaulting to edit mode');
+    }
+  }
+
+  // Get live content for markdown preview (unsaved changes)
+  const getLiveContent = () => {
+    if (tabContent?.tabId === activeEditor.tabId && activeEditor.content) {
+      return activeEditor.content;
+    }
+    return tabContent?.content || "";
+  };
+
+  if (panelId === "main" && !tabContent && !tabs?.activeTabId && tabs?.tabs?.length === 0) {
+    editorActions.forEach((action) => {
+      if (action && action.predicate) {
+        action.predicate({ title: '' });
+      }
+    })
+    return <EmptyPanel />;
+  }
+  // If tabContent is not yet available, you can return a loader
+  if (!tabContent) return null;
+
+  if (tabContent.type === "welcome") {
+    editorActions.forEach((action) => {
+      if (action && action.predicate) {
+        action.predicate({ title: '' });
+      }
+    })
+    return <WelcomeScreen />;
+  }
+
+  if (tabContent.type === "settings") {
+    editorActions.forEach((action) => {
+      if (action && action.predicate) {
+        action.predicate(tabContent);
+      }
+    })
+    return <SettingsScreen />;
+  }
+
+  if (tabContent.type === "changelog") {
+    editorActions.forEach((action) => {
+      if (action && action.predicate) {
+        action.predicate({ title: '' });
+      }
+    })
+    return <ChangeLogScreen />;
+  }
+
+  if (tabContent.type === "document") {
+    if (tabContent.content === null) return <div>This file is not available</div>;
+
+    // Filter the editor actions based on the active document's state.
+    const actionsToDisplay = editorActions.filter((action) => {
+      return !action.predicate || action.predicate(tabContent);
+    });
+    return (
+      <div className="h-full flex flex-col">
+        <div className="h-8 px-5 flex items-center justify-between w-full flex-shrink-0">
+          {/* editor action plugins go here */}
+          <div className="flex items-center justify-between space-x-2 w-full">
+            <div className="flex-1">{/* todo things go here */}</div>
+            <div className="flex space-x-2">
+              {tabContent.title.endsWith(".void") ? (
+                // For .void files, show actions in a dropdown menu
+                <ActionMenu actionsToDisplay={actionsToDisplay} tab={tabContent} />
+              ) : (
+                // For other files, show actions inline
+                actionsToDisplay.map((action) => {
+                  const ActionComponent = action.component;
+                  if (!ActionComponent || typeof ActionComponent !== 'function') {
+                    console.warn(`[PanelContent] Invalid editor action component for action: ${action.id}`);
+                    return null;
+                  }
+                  return <ActionComponent key={action.id} tab={tabContent} />;
+                })
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 bg-editor" id="code-editor-container">
+          {tabContent.title.endsWith(".void") ? (
+            <div
+              className="h-full w-full"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.electron?.editor?.showContextMenu) {
+                  window.electron.editor.showContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    selectedText: window.getSelection()?.toString(),
+                  });
+                }
+              }}
+            >
+              <VoidenEditor
+                key={tabContent.tabId}
+                tabId={tabContent.tabId}
+                content={tabContent.content}
+                source={tabContent.source}
+                panelId={panelId}
+                hasSearch
+              />
+            </div>
+          ) : tabContent.title.endsWith(".md") ? (
+            // Markdown file - toggle between edit and preview
+            // Only show preview if md-preview plugin is loaded
+            viewMode === "preview" && mdPreviewHelpers?.Preview ? (
+              (() => {
+                const PreviewComponent = mdPreviewHelpers.Preview;
+                return <PreviewComponent tab={{ ...tabContent, content: getLiveContent() }} />;
+              })()
+            ) : (
+              <div
+                className="h-full w-full"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (window.electron?.editor?.showContextMenu) {
+                    window.electron.editor.showContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      selectedText: window.getSelection()?.toString(),
+                    });
+                  }
+                }}
+              >
+                <CodeEditor key={tabContent.tabId} tabId={tabContent.tabId} content={tabContent.content} source={tabContent.source} panelId={panelId} />
+              </div>
+            )
+          ) : (
+            <div
+              className="h-full w-full"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.electron?.editor?.showContextMenu) {
+                  window.electron.editor.showContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    selectedText: window.getSelection()?.toString(),
+                  });
+                }
+              }}
+            >
+              <CodeEditor key={tabContent.tabId} tabId={tabContent.tabId} content={tabContent.content} source={tabContent.source} panelId={panelId} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (tabContent.type === "terminal") {
+    // Get all terminal tabs for this panel.
+    if (!panel) return null;
+    const terminalTabs = tabs?.tabs?.filter((tab: any) => tab.type === "terminal") || [];
+
+    // // In the unlikely event that no terminal tab exists (perhaps due to a race condition),
+    // // you could also trigger adding one here.
+    // if (terminalTabs.length === 0) {
+    //   // This will run on mount if there are no terminal tabs.
+    //   createTerminalTab(panelId);
+    //   return <div>Loading Terminal...</div>;
+    // }
+
+    // Map each terminal tab to the shape expected by TerminalManager.
+    const terminals = terminalTabs.map((tab: any) => ({
+      tabId: tab.id,
+      cwd: tab.source,
+    }));
+    return <TerminalManager terminalTabs={terminals} activeTabId={tabContent.tabId} />;
+  }
+
+  if (tabContent.type === "settings") {
+    return <SettingsContent />;
+  }
+
+  if (tabContent.type === "extensionDetails") {
+    editorActions.forEach((action) => {
+      if (action && action.predicate) {
+        action.predicate({ title: '' });
+      }
+    })
+    return <ExtensionDetails extensionData={tabContent.extensionData} content={tabContent.content} />;
+  }
+
+  if (tabContent.type === "diff") {
+    return <DiffViewer tab={tabContent} />;
+  }
+
+  if (tabContent.type === "custom") {
+    const tab = panel?.find((tab) => tab.id === tabContent.customTabKey);
+    const Component = tab?.content; // This is now a component (function or class)
+
+    // Validate component before rendering
+    if (!Component || typeof Component !== 'function') {
+      console.warn(`[PanelContent] Invalid custom panel component for tab: ${tabContent.customTabKey}`);
+      return <div className="h-full flex items-center justify-center text-comment">Panel component not available</div>;
+    }
+
+    return <div className="h-full"><Component /></div>;
+  }
+
+  return <div>Unsupported content</div>;
+};
+
+export const PanelContent = ({ panelId }: { panelId: string }) => {
+  // Force remount when plugin state changes to prevent stale hook references
+  const isInitialized = usePluginStore((state) => state.isInitialized);
+  const { data: tabs } = useGetPanelTabs(panelId);
+
+  // Don't render content while plugins are reloading to prevent accessing stale references
+  if (!isInitialized) {
+    return (
+      <div className="h-full w-full flex items-center justify-center text-comment">
+        <div className="text-sm">Loading plugins...</div>
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary level="component" resetKey={tabs?.activeTabId} key={`panel-${panelId}-${isInitialized}`}>
+      <PanelContentInner panelId={panelId} />
+    </ErrorBoundary>
+  );
+};

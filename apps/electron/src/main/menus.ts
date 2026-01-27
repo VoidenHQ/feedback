@@ -1,0 +1,206 @@
+import { BrowserWindow, dialog, shell } from "electron";
+
+import { ipcMain } from "electron";
+import path from "node:path";
+import { Menu } from "electron";
+import { createFile, deleteDirectory, deleteFile, duplicateFile } from "./fileSystem";
+import { findTabInPanel, removeTabFromPanel } from "./state";
+import { getAppState } from "./state";
+import { Tab } from "src/shared/types";
+import { saveState } from "./persistState";
+import eventBus from "./eventBus";
+import { FileTreeItem } from "src/types";
+import fs from "node:fs";
+import { windowManager } from "./windowManager";
+
+export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
+  ipcMain.on("show-file-context-menu", (event, data) => {
+    let menu;
+    const appState = getAppState(event);
+    // Check if this is the root folder of the current project
+    const isRootFolder =
+      appState.activeDirectory === data.path || Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path);
+
+    if (data.type === "folder") {
+      const menuTemplate = [
+        {
+          label: "New Voiden file...",
+          click: async () => {
+            windowManager.browserWindow?.webContents.send("file:create-void", {
+              path: data.path,
+            });
+          },
+        },
+        {
+          label: "New file...",
+          click: async () => {
+            // console.debug("new -regular file");
+            windowManager.browserWindow?.webContents.send("file:create", {
+              path: data.path,
+            });
+          },
+        },
+        {
+          label: "New folder...",
+          click: async () => {
+            windowManager.browserWindow?.webContents.send("directory:create", {
+              path: data.path,
+            });
+          },
+        },
+        {
+          label: "Reveal in Finder",
+          accelerator: "Option+Cmd+R",
+          click: () => {
+            shell.showItemInFolder(data.path);
+          },
+        },
+        { type: "separator" as const },
+        {
+          label: "Close Project",
+          click: async () => {
+            windowManager.browserWindow?.webContents.send("directory:close-project", {});
+          },
+        },
+        { type: "separator" as const },
+      ];
+
+      // Only add rename and delete options if not the root folder
+      if (!isRootFolder) {
+        menuTemplate.push({
+          label: "Rename",
+          click: () => {
+            windowManager.browserWindow?.webContents.send("file:rename", {
+              path: data.path,
+            });
+          },
+        });
+        menuTemplate.push({
+          label: "Delete",
+          accelerator: process.platform === "darwin" ? "Cmd+Backspace" : "Delete",
+          click: async () => {
+            const res = await deleteDirectory(data.path);
+            windowManager.browserWindow?.webContents.send("directory:delete", data);
+          },
+        });
+      }
+
+      menu = Menu.buildFromTemplate(menuTemplate);
+    } else {
+      menu = Menu.buildFromTemplate([
+        {
+          label: "Reveal in Finder",
+          accelerator: "Option+Cmd+R",
+          click: () => {
+            shell.showItemInFolder(data.path);
+          },
+        },
+        { type: "separator" as const },
+        {
+          label: "Rename",
+          click: () => {
+            windowManager.browserWindow?.webContents.send("file:rename", {
+              path: data.path,
+            });
+          },
+        },
+        {
+          label: "Delete",
+          accelerator: process.platform === "darwin" ? "Cmd+Backspace" : "Delete",
+          click: async () => {
+            // Delete the file from disk
+            const deleted = await deleteFile(data.path);
+            if (!deleted) return;
+
+            const appState = getAppState(event);
+            const layout = appState.activeDirectory ? appState.directories[appState.activeDirectory]?.layout : appState.unsaved.layout;
+            if (!layout) {
+              throw new Error("No layout found to close tab.");
+            }
+
+            // Build a dummy tab that represents the file tab.
+            // We assume that file tabs are of type "document" and that their 'source' field is the file path.
+            const dummyTab: Tab = {
+              id: "", // not used in the search
+              type: "document",
+              title: data.name,
+              source: data.path,
+              directory: null,
+            };
+
+            // Use the helper to search for the tab in the "main" panel.
+            const tabToRemove = findTabInPanel(layout, "main", dummyTab);
+            if (!tabToRemove) {
+              // console.warn("No matching tab found for file:", data.path);
+            } else {
+              // Remove the tab using its real id.
+              const removed = removeTabFromPanel(layout, "main", tabToRemove.id);
+              if (removed) {
+                await saveState(appState);
+              }
+            }
+
+            // Notify that the file was deleted.
+            windowManager.browserWindow?.webContents.send("file:delete", data);
+          },
+        },
+        {
+          label: "Duplicate",
+          click: async () => {
+            const originalPath = data.path;
+            const fileName = path.basename(originalPath);
+            const ext = path.extname(fileName);
+            const baseName = path.basename(fileName, ext);
+            const newName = `${baseName} copy${ext}`;
+
+            try {
+              const result = await duplicateFile(originalPath, newName);
+              windowManager.browserWindow?.webContents.send("file:duplicate", {
+                path: result.path,
+                name: result.name,
+              });
+            } catch (err: any) {
+              dialog.showErrorBox("Error", `Failed to duplicate file:\n${err.message}`);
+            }
+          },
+        },
+      ]);
+    }
+
+    menu.popup({ window: windowManager.browserWindow||undefined });
+  });
+
+  ipcMain.on("show-bulk-delete-menu", async (event, data: FileTreeItem[]) => {
+    const template = [
+      {
+        label: `Delete ${data.length} items`,
+        click: async () => {
+          const { response } = await dialog.showMessageBox({
+            type: "none",
+            buttons: ["Cancel", "Delete"],
+            defaultId: 0,
+            title: "Confirm Delete",
+            message: "Are you sure you want to delete these items?",
+            detail: `${data.length} items will be moved to trash.`,
+          });
+
+          if (response === 1) {
+            // Delete all items
+            for (const item of data) {
+              if (item.type === "folder") {
+                 await fs.promises.rm(item.path,{recursive:true,force:true});
+                windowManager.browserWindow?.webContents.send("directory:delete", item);
+              } else {
+                await shell.trashItem(item.path);
+                windowManager.browserWindow?.webContents.send("file:delete", item);
+              }
+            }
+          }
+        },
+      },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({ window: mainWindow });
+  });
+};

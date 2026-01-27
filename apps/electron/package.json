@@ -1,0 +1,79 @@
+{
+  "name": "voiden",
+  "productName": "Voiden",
+  "version": "1.1.0",
+  "private": true,
+  "author": {
+    "name": "ApyHub",
+    "email": "hello@apyhub.com"
+  },
+  "license": "UNLICENSED",
+  "description": "Build, Test, Document & Collaborate. Streamline your API development process with Voiden",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "NODE_OPTIONS='--max-old-space-size=4096' electron-forge make",
+    "publish": "electron-forge publish",
+    "version:bump:beta-patch": "node version-bump.js beta patch",
+    "version:bump:beta-prerelease": "node version-bump.js beta prerelease",
+    "version:bump:stable-patch": "node version-bump.js stable patch",
+    "version:bump:stable-minor": "node version-bump.js stable minor",
+    "version:bump:stable-major": "node version-bump.js stable major"
+  },
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.4.0",
+    "@electron-forge/maker-deb": "7.4.0",
+    "@electron-forge/maker-dmg": "7.4.0",
+    "@electron-forge/maker-rpm": "7.4.0",
+    "@electron-forge/maker-squirrel": "7.4.0",
+    "@electron-forge/maker-zip": "7.4.0",
+    "@electron-forge/plugin-auto-unpack-natives": "7.4.0",
+    "@electron-forge/plugin-fuses": "7.4.0",
+    "@electron-forge/plugin-vite": "7.4.0",
+    "@electron-forge/publisher-s3": "7.4.0",
+    "@electron/fuses": "^1.8.0",
+    "@pengx17/electron-forge-maker-appimage": "^1.2.1",
+    "@types/adm-zip": "^0",
+    "@types/js-yaml": "^4",
+    "@types/mime-types": "^2",
+    "aws-sdk": "2.1692.0",
+    "dotenv": "^16.4.5",
+    "electron": "30.5.1",
+    "electron-squirrel-startup": "^1.0.1",
+    "semver": "^7.6.0",
+    "ts-node": "^10.0.0",
+    "typescript": "~4.5.4",
+    "undici": "^6.19.8",
+    "update-electron-app": "^3.0.0",
+    "vite": "^5.0.12"
+  },
+  "keywords": [],
+  "dependencies": {
+    "@grpc/grpc-js": "1.14.1",
+    "adm-zip": "^0.5.16",
+    "fast-glob": "^3.3.3",
+    "graphql": "^16.12.0",
+    "graphql-ws": "^6.0.6",
+    "js-yaml": "^4.1.0",
+    "mime-types": "^2.1.35",
+    "node-pty": "^1.0.0",
+    "remove-markdown": "^0.6.2",
+    "simple-git": "^3.27.0",
+    "sudo-prompt": "^9.2.1"
+  },
+  "comments": {
+    "removed-dependencies": "@voiden/core-extensions and @voiden/sdk are bundled by Vite into main.js and renderer, so they don't need to be runtime dependencies"
+  },
+  "build": {
+    "appId": "md.voiden.app",
+    "productName": "Voiden",
+    "linux": {
+      "icon": "src/images/icon.png",
+      "category": "Development"
+    }
+  }
+}

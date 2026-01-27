@@ -1,0 +1,9 @@
+{
+  "workspaces": {
+    "apps/ui": {
+      "entry": ["src/main.tsx"],
+      "project": ["**/*.{js,ts,tsx}"],
+      "ignore": ["src/components/ui/**/*"]
+    }
+  }
+}

@@ -1,0 +1,226 @@
+import * as React from "react";
+import { Node } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import type { AssertionResult } from "../lib/assertionEngine";
+
+export interface AssertionResultsAttrs {
+  results: AssertionResult[];
+  totalAssertions: number;
+  passedAssertions: number;
+  failedAssertions: number;
+}
+
+// Factory function pattern
+export const createAssertionResultsNode = (NodeViewWrapper: any) => {
+  const AssertionResultsComponent = ({ node }: any) => {
+    const { results, totalAssertions, passedAssertions, failedAssertions } =
+      node.attrs as AssertionResultsAttrs;
+    const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+    const getStatusColor = (passed: boolean) => {
+      return passed ? "text-green-400" : "text-red-400";
+    };
+
+    const handleCopy = () => {
+      // Create tab-separated values for easy pasting into spreadsheets
+      const header = "Status\tAssertion\tOperator\tExpected\tActual\tError";
+      const rows = results.map((r) => {
+        const status = r.passed ? "PASS" : "FAIL";
+        const assertion = r.assertion.description || r.assertion.field;
+        const operator = r.assertion.operator;
+        const expected = r.assertion.expectedValue;
+        const actual = r.actualValue !== null && r.actualValue !== undefined
+          ? (typeof r.actualValue === "object" ? JSON.stringify(r.actualValue) : String(r.actualValue))
+          : "undefined";
+        const error = r.error || "";
+        return `${status}\t${assertion}\t${operator}\t${expected}\t${actual}\t${error}`;
+      });
+      const text = [header, ...rows].join("\n");
+      navigator.clipboard.writeText(text);
+    };
+
+    const passRate = totalAssertions > 0
+      ? Math.round((passedAssertions / totalAssertions) * 100)
+      : 0;
+
+    return (
+      <NodeViewWrapper
+        className="assertion-results-node"
+        style={{ userSelect: "text" }}
+      >
+        <div className="my-2">
+          {/* Header with collapse */}
+          <div
+            className="bg-bg border-b !border-solid !border-[rgba(0,0,0,0.2)] px-2 py-1.5 flex items-center justify-between header-bar cursor-pointer"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+          >
+            <div className="flex items-center gap-2" style={{ userSelect: "none" }}>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                className="text-comment"
+                style={{
+                  transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s",
+                  pointerEvents: "none",
+                }}
+              >
+                <path
+                  d="M3 4.5L6 7.5L9 4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="text-sm font-semibold" style={{ pointerEvents: "none" }}>
+                Assertion Results
+              </span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${
+                  failedAssertions === 0
+                    ? "bg-green-500/20 text-green-400"
+                    : "bg-red-500/20 text-red-400"
+                }`}
+                style={{ pointerEvents: "none" }}
+              >
+                {passedAssertions}/{totalAssertions} passed ({passRate}%)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1" style={{ userSelect: "none" }}>
+              {!isCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopy();
+                  }}
+                  className="px-3 py-1 text-xs text-comment hover:bg-active/50 rounded"
+                  style={{ cursor: "pointer", userSelect: "none" }}
+                >
+                  Copy
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Content - collapsible */}
+          {!isCollapsed && (
+            <div className="bg-editor overflow-x-auto">
+              {results.length === 0 ? (
+                <div className="p-4 text-center text-comment text-sm">
+                  No assertions to display
+                </div>
+              ) : (
+                <table className="w-full text-xs table-fixed">
+                  <thead>
+                    <tr className="bg-bg border-b !border-solid !border-[rgba(0,0,0,0.2)]">
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "60px" }}>
+                        Status
+                      </th>
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "30%" }}>
+                        Assertion
+                      </th>
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "100px" }}>
+                        Operator
+                      </th>
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "15%" }}>
+                        Expected
+                      </th>
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "15%" }}>
+                        Actual
+                      </th>
+                      <th className="px-2 py-2 text-left font-semibold text-comment" style={{ width: "auto" }}>
+                        Error
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.map((result, index) => (
+                      <tr
+                        key={index}
+                        className={`border-b !border-solid !border-[rgba(0,0,0,0.1)] hover:bg-active/30 transition-colors ${
+                          result.passed ? "" : "bg-red-500/5"
+                        }`}
+                      >
+                        <td className="px-2 py-2">
+                          <span className={`font-medium text-xs ${getStatusColor(result.passed)}`}>
+                            {result.passed ? "PASS" : "FAIL"}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="font-mono truncate" title={result.assertion.description || result.assertion.field}>
+                            {result.assertion.description || result.assertion.field}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="font-mono text-ui-fg">
+                            {result.assertion.operator}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="font-mono text-green-400 break-all">
+                            {result.assertion.expectedValue}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={`font-mono break-all ${
+                              result.passed ? "text-green-400" : "text-red-400"
+                            }`}
+                          >
+                            {result.actualValue !== null && result.actualValue !== undefined
+                              ? typeof result.actualValue === "object"
+                                ? JSON.stringify(result.actualValue)
+                                : String(result.actualValue)
+                              : "undefined"}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          {result.error && (
+                            <span className="font-mono text-red-400 break-all">
+                              {result.error}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </NodeViewWrapper>
+    );
+  };
+
+  return Node.create({
+    name: "assertion-results",
+    group: "block",
+    atom: true,
+
+    addAttributes() {
+      return {
+        results: { default: [] },
+        totalAssertions: { default: 0 },
+        passedAssertions: { default: 0 },
+        failedAssertions: { default: 0 },
+      };
+    },
+
+    parseHTML() {
+      return [{ tag: 'div[data-type="assertion-results"]' }];
+    },
+
+    renderHTML({ HTMLAttributes }) {
+      return ["div", { "data-type": "assertion-results", ...HTMLAttributes }];
+    },
+
+    addNodeView() {
+      return ReactNodeViewRenderer(AssertionResultsComponent);
+    },
+  });
+};

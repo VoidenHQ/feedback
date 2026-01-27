@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) ApyHub
+# Voiden CLI launcher for macOS and Linux
+
+# ============================================
+# VERSION - UPDATE THIS MANUALLY FOR RELEASES
+# ============================================
+VOIDEN_VERSION="1.0.1"
+
+# Show version
+show_version() {
+    echo "Voiden v$VOIDEN_VERSION"
+}
+
+# Show help
+show_help() {
+    echo "Voiden - File and Directory Management"
+    echo ""
+    echo "Usage: voiden [options] or voiden path"
+    echo ""
+    echo "Options:"
+    echo "  -v, --version     Show version information"
+    echo "  -h, --help        Show this help message"
+    echo "  path            Open file or directory"
+    echo ""
+    echo "Examples:"
+    echo "  voiden                     # Open Voiden"
+    echo "  voiden ~/Documents         # Open Documents directory"
+    echo "  voiden myproject           # Open myproject from current directory"
+    echo "  voiden file.txt  # Open files as tabs"
+    echo "  voiden -v                  # Show version"
+    echo "  voiden --version           # Show version"
+    echo "  voiden -h                  # Show this help"
+    echo "  voiden --help              # Show this help"
+    echo ""
+    echo "Note: Relative paths are resolved from your current terminal location"
+}
+
+# Show error for unrecognized flags
+show_flag_error() {
+    echo "Error: Unrecognized flag '$1'"
+    echo "For information, type: voiden --help"
+    exit 1
+}
+
+# Check and validate arguments
+validate_arguments() {
+    for arg in "$@"; do
+        # Check if it's a flag (starts with -)
+        if [[ "$arg" =~ ^- ]]; then
+            # Check for valid flags
+            case "$arg" in
+                -v|--version|-h|--help)
+                    # Valid flags, will be handled separately
+                    ;;
+                -*)
+                    # Invalid flag - show error and exit
+                    show_flag_error "$arg"
+                    ;;
+            esac
+        fi
+    done
+}
+
+# Resolve path based on whether it's absolute or relative
+resolve_path() {
+    local path="$1"
+    
+    # Check if path is absolute (starts with / or ~)
+    if [[ "$path" == /* ]] || [[ "$path" == ~* ]]; then
+        # Absolute path - expand ~ if present and return as-is
+        echo "${path/#\~/$HOME}"
+    elif [[ "$path" == "." ]]; then
+        # Current directory - return PWD
+        echo "$PWD"
+    else
+        # Relative path - resolve with PWD
+        echo "$PWD/$path"
+    fi
+}
+
+function app_realpath() {
+    SOURCE=$1
+    while [ -h "$SOURCE" ]; do
+        DIR=$(dirname "$SOURCE")
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+    done
+    SOURCE_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+    echo "${SOURCE_DIR%%${SOURCE_DIR#*.app}}"
+}
+
+# ============================================
+# MAIN SCRIPT EXECUTION
+# ============================================
+
+# Check for help/version flags first (before validation)
+for arg in "$@"; do
+    case "$arg" in
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+    esac
+done
+
+# Validate all arguments (will exit if invalid flags found)
+validate_arguments "$@"
+
+# Determine the application path
+APP_PATH="$(app_realpath "${BASH_SOURCE[0]}")"
+
+# If we couldn't determine from symlink, try common installation paths
+if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+    # macOS
+    if [ "$(uname)" == "Darwin" ]; then
+        APP_PATH="/Applications/Voiden.app"
+    # Linux
+    else
+        # Try common Linux installation paths
+        if [ -d "/opt/Voiden" ]; then
+            APP_PATH="/opt/Voiden"
+        elif [ -d "/usr/share/voiden" ]; then
+            APP_PATH="/usr/share/voiden"
+        elif [ -d "$HOME/.local/share/voiden" ]; then
+            APP_PATH="$HOME/.local/share/voiden"
+        fi
+    fi
+fi
+
+# Verify app path exists
+if [ ! -d "$APP_PATH" ]; then
+	echo "Unable to find Voiden installation"
+    echo "Searched: $APP_PATH"
+    exit 1
+fi
+
+# Launch based on platform
+if [ "$(uname)" == "Darwin" ]; then
+	# macOS
+    ELECTRON="$APP_PATH/Contents/MacOS/Voiden"
+    if [ ! -f "$ELECTRON" ]; then
+		echo "Voiden executable not found at: $ELECTRON"
+        exit 1
+    fi
+
+    # Process arguments and resolve paths
+    RESOLVED_ARGS=()
+    
+    for arg in "$@"; do
+        # Skip flags (they were already handled)
+        if [[ "$arg" =~ ^- ]]; then
+            continue
+        fi
+        
+        # Resolve the path
+        resolved_path=$(resolve_path "$arg")
+        RESOLVED_ARGS+=("$resolved_path")
+    done
+
+    # Launch detached from terminal with proper argument passing
+    if [ ${#RESOLVED_ARGS[@]} -eq 0 ]; then
+        # No arguments, just open the app
+        nohup "$ELECTRON" > /dev/null 2>&1 &
+    else
+        # Pass resolved arguments directly, detached
+        nohup "$ELECTRON" "${RESOLVED_ARGS[@]}" > /dev/null 2>&1 &
+    fi
+else
+	# Linux
+    ELECTRON="$APP_PATH/voiden"
+    if [ ! -f "$ELECTRON" ]; then
+        # Try alternate location
+        ELECTRON="$APP_PATH/Voiden"
+    fi
+
+    if [ ! -f "$ELECTRON" ]; then
+		echo "Voiden executable not found at: $APP_PATH"
+        exit 1
+    fi
+
+    # Process arguments and resolve paths
+    RESOLVED_ARGS=()
+    
+    for arg in "$@"; do
+        # Skip flags (they were already handled)
+        if [[ "$arg" =~ ^- ]]; then
+            continue
+        fi
+        
+        # Resolve the path
+        resolved_path=$(resolve_path "$arg")
+        RESOLVED_ARGS+=("$resolved_path")
+    done
+
+    # Launch detached from terminal with proper argument passing
+    if [ ${#RESOLVED_ARGS[@]} -eq 0 ]; then
+        # No arguments, just open the app
+        nohup "$ELECTRON" > /dev/null 2>&1 &
+    else
+        # Pass resolved arguments directly, detached
+        nohup "$ELECTRON" "${RESOLVED_ARGS[@]}" > /dev/null 2>&1 &
+    fi
+fi
+
+exit 0

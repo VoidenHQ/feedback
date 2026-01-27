@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Voiden</title>
+    <!-- All fonts are now embedded locally in /public/fonts/ -->
+    <!-- <script src="https://unpkg.com/react-scan/dist/auto.global.js"></script> -->
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      if (global === undefined) {
+        var global = window;
+      }
+    </script>
+    <script type="module" src="/src/renderer.ts"></script>
+  </body>
+</html>

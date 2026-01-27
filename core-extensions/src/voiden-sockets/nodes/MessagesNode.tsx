@@ -1,0 +1,896 @@
+/**
+ * Messages Node
+ *
+ * Lightweight chat-style viewer for interactions.
+ * - Listens for ws-open, ws-message, ws-close, ws-error (via window.electron.request.listenSecure)
+ * - Shows a simple "chat" with input + SEND button and a running message/event log
+ * - Distinguishes events with icons and colors
+ * - NEW: Copy individual messages & Export all to CSV
+ *
+ * Expected globals from preload:
+ *   window.electron.request.listenSecure(eventName, (e, d) => {...})
+ *   window.electron.request.sendMessage(wsId, data)
+ */
+
+import * as React from "react";
+import { Node } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { PluginContext } from "@voiden/sdk";
+import { Play, Square, X, CornerDownLeft, CornerDownRight, Copy, Download, Check, AlertCircle } from "lucide-react";
+
+// What we accept as node attributes
+export interface MessagesAttrs {
+  wsId?: string | null;
+  url?: string | null;
+}
+
+type ChatItem =
+  | { kind: "system-open"; ts: number; wsId: string; url?: string | null }
+  | { kind: "system-pause"; ts: number; wsId: string; url?: string | null, code?: number, reason?: string, message?: string }
+  | { kind: "system-close"; ts: number; wsId: string; code?: number; reason?: string; wasClean?: boolean }
+  | { kind: "system-error"; ts: number; wsId?: string; message: string; code?: any; cause?: any; name?: string }
+  | { kind: "recv"; ts: number; wsId: string; data: any }
+  | { kind: "sent"; ts: number; wsId: string; data: any };
+
+function formatTime(ts: number) {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString();
+  } catch {
+    return "";
+  }
+}
+
+function formatFullDateTime(ts: number) {
+  try {
+    const d = new Date(ts);
+    return d.toISOString();
+  } catch {
+    return "";
+  }
+}
+
+// Enhanced data renderer
+interface RenderResult {
+  text: string;
+  type: 'text' | 'json' | 'xml' | 'html' | 'binary' | 'base64' | 'buffer' | 'error';
+  isFormatted: boolean;
+  originalSize?: number;
+}
+
+function dataToRenderableText(data: any): RenderResult {
+  if (data === null) {
+    return { text: 'null', type: 'text', isFormatted: false };
+  }
+  if (data === undefined) {
+    return { text: 'undefined', type: 'text', isFormatted: false };
+  }
+
+  if (typeof data === 'string') {
+    return analyzeAndFormatString(data);
+  }
+
+  if (data?.type === "Buffer" && Array.isArray(data.data)) {
+    return handleBufferData(data.data);
+  }
+
+  if (data instanceof ArrayBuffer) {
+    const uint8 = new Uint8Array(data);
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(uint8);
+      return analyzeAndFormatString(text);
+    } catch {
+      return {
+        text: `[ArrayBuffer ${data.byteLength} bytes]`,
+        type: 'binary',
+        isFormatted: false,
+        originalSize: data.byteLength
+      };
+    }
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    const uint8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(uint8);
+      return analyzeAndFormatString(text);
+    } catch {
+      return {
+        text: `[${data.constructor.name} ${data.byteLength} bytes]`,
+        type: 'binary',
+        isFormatted: false,
+        originalSize: data.byteLength
+      };
+    }
+  }
+
+  if (typeof data === 'object') {
+    try {
+      const jsonString = JSON.stringify(data, null, 2);
+      return {
+        text: jsonString,
+        type: 'json',
+        isFormatted: true,
+        originalSize: jsonString.length
+      };
+    } catch {
+      return {
+        text: `[Object: ${Object.prototype.toString.call(data)}]`,
+        type: 'error',
+        isFormatted: false
+      };
+    }
+  }
+
+  return {
+    text: String(data),
+    type: 'text',
+    isFormatted: false
+  };
+}
+
+function analyzeAndFormatString(str: string): RenderResult {
+  const trimmed = str.trim();
+
+  if (!trimmed) {
+    return { text: '(empty string)', type: 'text', isFormatted: false };
+  }
+
+  // Try JSON
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const formatted = JSON.stringify(parsed, null, 2);
+      return {
+        text: formatted,
+        type: 'json',
+        isFormatted: true,
+        originalSize: str.length
+      };
+    } catch { }
+  }
+
+  // Try XML/HTML
+  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+    return {
+      text: str,
+      type: trimmed.toLowerCase().includes('<!doctype html') || trimmed.toLowerCase().includes('<html') ? 'html' : 'xml',
+      isFormatted: false,
+      originalSize: str.length
+    };
+  }
+
+  return {
+    text: str,
+    type: 'text',
+    isFormatted: false,
+    originalSize: str.length
+  };
+}
+
+function handleBufferData(bufferData: number[]): RenderResult {
+  const uint8 = new Uint8Array(bufferData);
+
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(uint8);
+    const result = analyzeAndFormatString(text);
+    return {
+      ...result,
+      originalSize: bufferData.length
+    };
+  } catch {
+    if (bufferData.length <= 1024) {
+      const hex = Array.from(uint8)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(' ');
+      return {
+        text: `[Buffer ${bufferData.length} bytes - Hex]\n${hex}`,
+        type: 'buffer',
+        isFormatted: true,
+        originalSize: bufferData.length
+      };
+    } else {
+      const base64 = btoa(String.fromCharCode(...uint8));
+      return {
+        text: `[Buffer ${bufferData.length} bytes - Base64]\n${base64}`,
+        type: 'buffer',
+        isFormatted: true,
+        originalSize: bufferData.length
+      };
+    }
+  }
+}
+
+type MessageFormat = 'text' | 'json' | 'html' | 'xml';
+
+// Factory function to create the node with context components
+export const createMessagesNode = (NodeViewWrapper: any, context: PluginContext) => {
+  const MessagesComponent = ({ node }: any) => {
+    const attrs = (node.attrs || {}) as MessagesAttrs;
+    const [wsId, setWsId] = React.useState<string | null>(attrs.wsId || null);
+    const [connected, setConnected] = React.useState<boolean>(false);
+    const [isPaused, setIsPaused] = React.useState<boolean>(false);
+    const [hasError, setHasError] = React.useState<boolean>(false);
+    const [url, setUrl] = React.useState<string | null>(attrs.url || null);
+    const [items, setItems] = React.useState<ChatItem[]>([]);
+    const isConnected = React.useRef<boolean>(false);
+
+    const [messageFormat, setMessageFormat] = React.useState<MessageFormat>('text');
+    const [messageContent, setMessageContent] = React.useState<string>("");
+    const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
+
+    const handleLangChange = (value: MessageFormat) => {
+      setMessageFormat(value);
+      setMessageContent('');
+    }
+
+    const handleMessageChange = (value: string) => {
+      setMessageContent(value);
+    }
+
+    // Copy individual message
+    const handleCopyMessage = async (item: ChatItem, index: number) => {
+      try {
+        let textToCopy = '';
+
+        if (item.kind === 'sent' || item.kind === 'recv') {
+          const result = dataToRenderableText(item.data);
+          textToCopy = result.text;
+        } else if (item.kind === 'system-error') {
+          textToCopy = `ERROR: ${item.message}`;
+        } else {
+          textToCopy = JSON.stringify(item, null, 2);
+        }
+
+        await navigator.clipboard.writeText(textToCopy);
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    };
+
+    // Export all messages to CSV
+    const handleExportCSV = () => {
+      try {
+        // CSV header
+        const headers = ['Timestamp', 'Type', 'Direction', 'Content', 'Format', 'Size'];
+        const rows = [headers];
+
+        // Convert each item to CSV row
+        items.forEach(item => {
+          const timestamp = formatFullDateTime(item.ts);
+          let type = item.kind;
+          let direction = '';
+          let content = '';
+          let format = '';
+          let size = '';
+
+          if (item.kind === 'sent' || item.kind === 'recv') {
+            direction = item.kind === 'sent' ? 'Outgoing' : 'Incoming';
+            const result = dataToRenderableText(item.data);
+            content = result.text.replace(/"/g, '""'); // Escape quotes
+            format = result.type;
+            size = result.originalSize ? `${result.originalSize} bytes` : '';
+          } else if (item.kind === 'system-error') {
+            content = item.message.replace(/"/g, '""');
+          } else if (item.kind === 'system-open') {
+            content = `Connected to ${item.url || 'WebSocket'}`;
+          } else if (item.kind === 'system-close') {
+            content = `Closed: ${item.reason || 'Unknown reason'} (code: ${item.code})`;
+          } else if (item.kind === 'system-pause') {
+            content = `Paused: ${item.reason || 'Unknown reason'}`;
+          }
+
+          rows.push([
+            timestamp,
+            type,
+            direction,
+            `"${content}"`,
+            format,
+            size
+          ]);
+        });
+
+        // Convert to CSV string
+        const csvContent = rows.map(row => row.join(',')).join('\n');
+
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `websocket-messages-${Date.now()}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Failed to export CSV:', err);
+        setItems((prev) => [
+          ...prev,
+          { kind: "system-error", ts: Date.now(), message: `Export failed: ${err}` }
+        ]);
+      }
+    };
+
+    // Export all messages to JSON
+    const handleExportJSON = () => {
+      try {
+        const exportData = items.map(item => {
+          const base = {
+            ...item,
+            timestamp: formatFullDateTime(item.ts),
+            kind: item.kind,
+          };
+
+          if (item.kind === 'sent' || item.kind === 'recv') {
+            const result = dataToRenderableText(item.data);
+            return {
+              ...base,
+              data: result.text,
+              dataType: result.type,
+              dataSize: result.originalSize
+            };
+          }
+
+          return base;
+        });
+
+        const jsonContent = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `websocket-messages-${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Failed to export JSON:', err);
+      }
+    };
+
+    // Auto-scroll to bottom on new items
+    const listRef = React.useRef<HTMLDivElement | null>(null);
+    React.useEffect(() => {
+      const el = listRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    }, [items.length]);
+
+    // Wire up IPC listeners
+    React.useEffect(() => {
+      const listen = (window as any)?.electron?.request?.listenSecure;
+      if (!listen) {
+        setItems((prev) => [
+          ...prev,
+          { kind: "system-error", ts: Date.now(), message: "IPC not available (window.electron.request.listenSecure missing)" },
+        ]);
+        return;
+      }
+
+      const offOpen = listen("ws-open", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          setWsId(d.wsId);
+          setConnected(true);
+          setIsPaused(false);
+          setHasError(false);
+          if (d?.url && !url) setUrl(d.url);
+          setItems((prev) => [...prev, { kind: "system-open", ts: Date.now(), wsId: d.wsId, url: d?.url }]);
+        }
+      });
+
+      const offMsg = listen("ws-message", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          setWsId(d.wsId);
+          setConnected(true);
+          setHasError(false);
+          setItems((prev) => [...prev, { kind: "recv", ts: Date.now(), wsId: d.wsId, data: d.data }]);
+        }
+      });
+
+      const offSent = listen("ws-message-sent", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          setWsId(d.wsId);
+          setConnected(true);
+          setHasError(false);
+          setItems((prev) => [...prev, { kind: "sent", ts: Date.now(), wsId: d.wsId, data: d.data }]);
+        }
+      });
+
+      const offErr = listen("ws-error", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          // Handle cleanup warning separately (don't set hasError)
+          if (d?.code === 'CLEANUP_WARNING') {
+            setItems((prev) => [
+              ...prev,
+              {
+                kind: "system-error",
+                ts: Date.now(),
+                wsId: d?.wsId,
+                message: d?.message || "Message history cleanup pending",
+                code: d?.code,
+              },
+            ]);
+          } else {
+            setHasError(true);
+            setItems((prev) => [
+              ...prev,
+              {
+                kind: "system-error",
+                ts: Date.now(),
+                wsId: d?.wsId,
+                message: d?.message || "Connection error",
+                code: d?.code,
+                cause: d?.cause,
+                name: d?.name,
+              },
+            ]);
+            setConnected(false);
+            isConnected.current = false;
+          }
+        }
+      });
+
+      const offClose = listen("ws-close", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          setConnected(false);
+          setIsPaused(false);
+          setItems((prev) => [
+            ...prev,
+            {
+              kind: "system-close",
+              ts: Date.now(),
+              wsId: d.wsId,
+              code: d.code,
+              reason: d.reason,
+              wasClean: d.wasClean,
+            }]);
+          isConnected.current = false;
+        }
+      });
+
+      const offPause = listen("ws-pause", (_e: any, d: any) => {
+        if (!wsId || d.wsId === wsId) {
+          setConnected(false);
+          setIsPaused(true);
+          setItems((prev) => [
+            ...prev,
+            {
+              kind: "system-pause",
+              ts: Date.now(),
+              wsId: d.wsId,
+              code: d.code,
+              reason: d.reason,
+              wasClean: d.wasClean,
+            },
+          ]);
+        }
+      });
+
+      return () => {
+        try { offOpen && offOpen(); } catch { }
+        try { offSent && offSent(); } catch { }
+        try { offMsg && offMsg(); } catch { }
+        try { offErr && offErr(); } catch { }
+        try { offClose && offClose(); } catch { }
+        try { offPause && offPause(); } catch { }
+      };
+    }, []);
+
+    const connectWebSocket = React.useCallback(async () => {
+      if (isConnected.current || !wsId) return;
+      isConnected.current = true;
+
+      try {
+        const result = await (window as any)?.electron?.request?.connectWss(wsId);
+        
+        // Check if the connection is paused
+        if (result?.wasPaused) {
+          console.log(`WebSocket ${wsId} is paused. Use Resume button to continue. Stored messages: ${result.storedMessageCount}`);
+          isConnected.current = false;
+          setConnected(false);
+          // Paused messages will be replayed via IPC events
+          return;
+        }
+        
+        // Check if the connection was previously closed
+        if (result?.wasClosed) {
+          console.log(`WebSocket ${wsId} was previously closed. Stored messages: ${result.storedMessageCount}`);
+          isConnected.current = false;
+          setConnected(false);
+          
+          // If no historical messages, the error will be sent via ws-error event
+          // which will be caught by the IPC listener below
+        } else {
+          console.log(`Attempted to connect WebSocket: ${wsId}`);
+        }
+      } catch (error) {
+        isConnected.current = false;
+        console.error(`Failed to connect WebSocket ${wsId}:`, error);
+        setItems((prev) => [
+          ...prev,
+          {
+            kind: "system-error",
+            ts: Date.now(),
+            wsId,
+            message: `Failed to connect: ${error}`
+          },
+        ]);
+      }
+    }, [wsId]);
+
+    const handleConnect = async () => {
+      if (isConnected.current) {
+        await (window as any)?.electron?.request?.pauseWss({ wsId, reason: "User disconnected" });
+        isConnected.current = false;
+        setIsPaused(true);
+      } else {
+        // Resume the paused connection instead of reconnecting
+        await (window as any)?.electron?.request?.resumeWss?.(wsId);
+        isConnected.current = true;
+        setIsPaused(false);
+      }
+    }
+
+    const handleClose = async () => {
+      if (isConnected.current && wsId) {
+        await (window as any)?.electron?.request?.closeWss({ wsId, code: 4000, reason: "User closed connection" });
+        setConnected(false);
+      }
+    };
+
+    React.useEffect(() => {
+      connectWebSocket();
+    }, [wsId]);
+
+    const handleSend = React.useCallback(() => {
+      const sendMessage = (window as any)?.electron?.request?.sendMessage;
+      if (!sendMessage) {
+        setItems((prev) => [...prev, { kind: "system-error", ts: Date.now(), message: "IPC not available (sendMessage missing)" }]);
+        return;
+      }
+      if (!wsId) {
+        setItems((prev) => [...prev, { kind: "system-error", ts: Date.now(), message: "Not connected (Id missing)" }]);
+        return;
+      }
+      const text = messageContent ?? "";
+      if (text.trim().length === 0) return;
+      setItems((prev) => [...prev, { kind: "sent", ts: Date.now(), wsId, data: text }]);
+      setMessageContent("");
+      try {
+        sendMessage(wsId, text);
+      } catch (err: any) {
+        setItems((prev) => [...prev, { kind: "system-error", ts: Date.now(), wsId, message: err?.message || "Failed to send message" }]);
+      }
+    }, [messageContent, wsId]);
+
+    const statusPill = () => {
+      let color = "bg-border";
+      let text = "Disconnected";
+      if (connected) {
+        color = "bg-green-500";
+        text = "Connected";
+      }
+      if (hasError) {
+        color = "bg-red-500";
+        text = connected ? "Error (Connected)" : "Error";
+      }
+      return (
+        <div className="flex gap-2">
+          <span className="flex flex-col items-end text-xs text-comment">
+            <div className="flex justify-center items-center gap-1">
+              <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
+              <span className="font-mono">{text}</span>
+            </div>
+            <div className="flex justify-center items-center gap-2">
+              {url && <span className="font-mono text-[11px] opacity-70">• {url}</span>}
+              {wsId && <span className="font-mono text-[11px] opacity-70">• id:{wsId.slice(0, 8)}</span>}
+            </div>
+          </span>
+
+        </div>
+      );
+    };
+
+    const renderItem = (it: ChatItem, idx: number) => {
+      const time = formatTime(it.ts);
+      const lineBase = "flex items-start gap-2 px-3 py-1.5 text-sm group relative";
+      const isCopied = copiedIndex === idx;
+
+      switch (it.kind) {
+        case "system-open":
+          return (
+            <div key={idx} className={`${lineBase} text-green-400`}>
+              <span>✓</span>
+              <div className="flex-1">
+                <div className="font-mono">CONNECTED</div>
+                <div className="text-xs text-comment">
+                  {time} {it.url ? `• ${it.url}` : ""}
+                </div>
+              </div>
+            </div>
+          );
+        case "system-pause":
+          return (
+            <div key={idx} className={`${lineBase} text-yellow-400`}>
+              <span>○</span>
+              <div className="flex-1">
+                <div className="font-mono">PAUSED</div>
+                <div className="text-xs text-comment">
+                  {time}
+                  {typeof it.code === "number" ? ` • code ${it.code}` : ""}
+                  {it.reason ? ` • ${it.reason}` : ""}
+                </div>
+              </div>
+            </div>
+          );
+        case "system-error":
+          const isCleanupWarning = it.code === 'CLEANUP_WARNING';
+          return (
+            <div key={idx} className={`${lineBase} ${isCleanupWarning ? 'text-yellow-400' : 'text-red-400'}`}>
+              <span>{isCleanupWarning ? 'ℹ' : '⚠'}</span>
+              <div className="flex-1">
+                <div className="font-mono">{isCleanupWarning ? 'INFO' : 'ERROR'}</div>
+                <div className="text-xs text-comment">
+                  {time} • {it.message}
+                  {!isCleanupWarning && it.code ? ` • code:${it.code}` : ""}
+                  {it.cause ? ` • cause:${it.cause}` : ""}
+                </div>
+              </div>
+              <button
+                onClick={() => handleCopyMessage(it, idx)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-active rounded"
+                title={isCleanupWarning ? "Copy info" : "Copy error"}
+              >
+                {isCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+          );
+        case "system-close":
+          return (
+            <div key={idx} className={`${lineBase} text-red-400`}>
+              <span>⚠</span>
+              <div className="flex-1">
+                <div className="font-mono">CLOSED</div>
+                <div className="text-xs text-comment">
+                  {time} • {it.reason}
+                  {it.code ? ` • code:${it.code}` : ""}
+                </div>
+              </div>
+            </div>
+          );
+        case "sent":
+          const sentResult = dataToRenderableText(it.data);
+          return (
+            <div key={idx} className={`${lineBase} flex justify-start items-center text-text bg-bg`}>
+              <span><CornerDownRight size={14} /></span>
+              <div className="flex-1">
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs">{sentResult.text}</pre>
+                <div className="text-xs text-comment">
+                  {time} • sent
+                  {sentResult.type !== 'text' && ` • ${sentResult.type}`}
+                  {sentResult.originalSize && ` • ${sentResult.originalSize} bytes`}
+                </div>
+              </div>
+              <button
+                onClick={() => handleCopyMessage(it, idx)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-active rounded"
+                title="Copy message"
+                id="ws-button"
+              >
+                {isCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+          );
+        case "recv":
+          const recvResult = dataToRenderableText(it.data);
+          return (
+            <div key={idx} className={`${lineBase} flex justify-end items-center text-text`}>
+              <button
+                onClick={() => handleCopyMessage(it, idx)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-active rounded"
+                title="Copy message"
+                id="ws-button"
+              >
+                {isCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              </button>
+              <div className="flex-1">
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs">{recvResult.text}</pre>
+                <div className="text-xs text-comment">
+                  {time} • received
+                  {recvResult.type !== 'text' && ` • ${recvResult.type}`}
+                  {recvResult.originalSize && ` • ${recvResult.originalSize} bytes`}
+                </div>
+              </div>
+              <span><CornerDownLeft size={14} /></span>
+            </div>
+          );
+        default:
+          return null;
+      }
+    };
+
+    if (!wsId) {
+      return (
+        <NodeViewWrapper>
+          <div className="h-full bg-bg flex flex-col items-center justify-center border border-stone-700/80 rounded p-6" style={{ height: '83vh' }}>
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle size={16} />
+              <span>Incorrect information or URL provided</span>
+            </div>
+            <div className="text-xs text-comment mt-2 text-center">
+              WebSocket connection could not be initialized because no identifier was provided.
+            </div>
+          </div>
+        </NodeViewWrapper>
+      );
+    }
+
+    if (items.length === 0) {
+      return <NodeViewWrapper />;
+    }
+
+    return (
+      <NodeViewWrapper className="messages-node" style={{ userSelect: "text" }} contentEditable={false}>
+        <div className="flex flex-col" style={{ height: '83vh' }}>
+
+          {/* Header bar */}
+          <div className="flex items-center justify-between bg-bg border-b !border-solid !border-[rgba(0,0,0,0.2)] px-2 py-1.5">
+            <div className="flex-1 flex justify-between items-center gap-2">
+              <span className="text-sm font-semibold">WSS/gRPC</span>
+              {statusPill()}
+
+            </div>
+          </div>
+
+          {/* Input + SEND */}
+          {
+            isConnected.current && (
+              <div className="bg-bg px-2 py-2">
+                <div className="bg-gray-50 border-t border-stone-700/80">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-stone-700/80">
+                    <select
+                      value={messageFormat}
+                      onChange={(e) => handleLangChange(e.target.value as MessageFormat)}
+                      className="bg-bg text-text border border-stone-700/80 rounded px-2 py-1 text-sm appearnce-none pr-6"
+                    >
+                      {(['text', 'json', 'html', 'xml'] as MessageFormat[]).map((format) => (
+                        <option key={format} value={format}>
+                          {format.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                    <div id="ws-button" className={`${(!isConnected.current) ? 'cursor-not-allowed' : "cursor-pointer"}`}>
+                      <button
+                        className={`w-full ${(!isConnected.current) ? '!cursor-not-allowed' : "!cursor-pointer"} px-2 py-1 rounded text-sm font-medium transition-colors border-stone-700/80 border`}
+                        onClick={handleSend}
+                        disabled={!connected || !wsId}
+                        title={connected ? "Send message (Ctrl+Enter)" : "Not connected"}
+                        style={{
+                          cursor: isConnected.current ? 'pointer!important' : 'not-allowed'
+                        }}
+                      >
+                        SEND
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 border-stone-700/80 border">
+                    {context.ui.components.CodeEditor && (
+                      <context.ui.components.CodeEditor
+                        lang={messageFormat === 'json' ? 'json' : messageFormat === 'html' ? 'html' : messageFormat === 'xml' ? 'xml' : 'plaintext'}
+                        onChange={(val: string) => {
+                          handleMessageChange(val)
+                        }}
+                        value={messageContent}
+                        readOnly={!isConnected.current || !wsId}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          {/* Message list */}
+          <div
+            ref={listRef}
+            className="bg-editor flex-1"
+            style={{
+              overflowY: "auto",
+            }}
+          >
+            {items.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-comment">
+                Waiting for <span className="font-mono">ws-open</span>…
+              </div>
+            ) : (
+              <div className="py-1">{items.map(renderItem)}</div>
+            )}
+          </div>
+          <div className="border border-stone-700/80 w-full flex justify-between px-3 py-2">
+
+            <div className="flex gap-4">
+              {wsId && isConnected.current && (
+                <div onClick={handleConnect} id="ws-button" className="flex items-center cursor-pointer">
+                  <span className="flex p-1 hover:bg-active rounded transition-colors items-center gap-1 text-sm">
+                    <Square className={"text-yellow-500"} size={14} /> Pause
+                  </span>
+                </div>
+              )}
+              {wsId && isPaused && (
+                <div onClick={handleConnect} id="ws-button" className="flex items-center cursor-pointer">
+                  <span className="flex p-1 hover:bg-active rounded transition-colors items-center gap-1 text-sm">
+                    <Play className={"text-green-500"} size={14} /> Resume
+                  </span>
+                </div>
+              )}
+              <div onClick={handleClose} id="ws-button" className="flex items-center">
+                {isConnected.current && <span className="flex p-1 hover:bg-active rounded transition-colors items-center gap-1 text-sm text-text"> <X className={"text-red-500"} size={14} /> Close </span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {items.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    id="ws-button"
+                    onClick={handleExportJSON}
+                    className="p-1 flex items-center hover:bg-active rounded transition-colors"
+                    title="Export all as JSON"
+                  >
+                    <Download size={14} className="text-text" />
+                    <span className="text-sm ml-1">JSON</span>
+                  </button>
+                  <button
+                    id="ws-button"
+                    onClick={handleExportCSV}
+                    className="p-1 flex items-center hover:bg-active rounded transition-colors"
+                    title="Export all as CSV"
+                  >
+                    <Download size={14} className="text-text" />
+                    <span className="text-sm ml-1">CSV</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </NodeViewWrapper>
+    );
+  };
+
+  return Node.create({
+    name: "messages-node",
+
+    group: "block",
+
+    atom: true,
+
+    addAttributes() {
+      return {
+        wsId: { default: null },
+        url: { default: null },
+      };
+    },
+
+    parseHTML() {
+      return [
+        {
+          tag: 'div[data-type="messages-node"]',
+        },
+      ];
+    },
+
+    renderHTML({ HTMLAttributes }) {
+      return ["div", { "data-type": "messages-node", ...HTMLAttributes }];
+    },
+
+    addNodeView() {
+      return ReactNodeViewRenderer(MessagesComponent);
+    },
+  });
+};

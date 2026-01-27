@@ -1,0 +1,432 @@
+import { app } from "electron";
+import fs from "fs/promises";
+import path from "path";
+import { AppState, AppSettings, PanelElement, Tab } from "src/shared/types";
+import { windowManager } from "./windowManager";
+
+const apiReadme = `# Voiden API Extension
+
+## Overview
+
+The **Voiden API Extension** provides a streamlined way for Voiden users to build and manage REST API calls through a set of configurable blocks. Each block corresponds to a component of an HTTP request, making it easier to define endpoints, headers, parameters, and body content without having to code everything from scratch. By combining these blocks, you can quickly set up and customize your API calls in a modular, low-code environment.
+
+## Available Blocks & Usage
+
+Below is a list of the blocks available in this extension, along with the commands used to insert them:
+
+### 1. Endpoint
+
+- **Slash Command**: \`/endpoint\`
+- **Purpose**: Creates a block where you can add a base URL and select the request method (e.g., GET, POST, PUT, DELETE).
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. Specify the base URL (e.g., \`https://api.example.com/v1/resource\`).
+  3. Select the request type.
+
+### 2. Headers
+
+- **Slash Command**: \`/headers\`
+- **Purpose**: Creates a table where you can specify the headers for the request (e.g., \`Authorization\`, \`Content-Type\`).
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. Add rows for each header key-value pair.
+
+### 3. Query Table
+
+- **Slash Command**: \`/query\`
+- **Purpose**: Creates a table where you can specify query parameters for the request.
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. Define each parameter name and value (e.g., \`page=2\`, \`sort=desc\`).
+  3. These parameters will be appended to the endpoint URL.
+
+### 4. Multipart Table
+
+- **Slash Command**: \`/multipart\`
+- **Purpose**: Creates a table where you can send files or shared files as multipart form-data.
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. For each row, specify the name of the field and the file to be sent.
+  3. Ideal for file uploads or form submissions that require file data.
+
+### 5. URL Table
+
+- **Slash Command**: \`/urltable\`
+- **Purpose**: Creates a table where you can send URL-encoded form data.
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. Define each key-value pair to be included in the request body as \`application/x-www-form-urlencoded\`.
+
+### 6. JSON
+
+- **Slash Command**: \`/json\`
+- **Purpose**: Lets you specify the JSON body content for the request.
+- **Usage**:
+  1. Insert the block using the slash command.
+  2. Enter valid JSON data (e.g., \`{"key": "value"}\`).
+
+Once all blocks are configured, you can execute the request and get the response in response panel
+
+---
+
+## Feedback & Support
+
+If you have any questions, feature requests, or need support, feel free to reach out through [email](mailto:hello@apyhub.com) or discord. We're always looking to improve the experience for everyone using the Voiden API Extension.`;
+
+// Change the file paths as needed.
+const SETTINGS_FILE = path.join(app.getPath("userData"), "voiden-settings.json");
+const AUTOSAVE_DIR = path.join(app.getPath("userData"), "autosave");
+let TEMPLATE_DIR: string;
+if (!app.isPackaged) {
+  TEMPLATE_DIR = path.resolve(__dirname, "../../src/sample-project");
+} else {
+  // process.resourcesPath points to the resources directory in a packaged app.
+  TEMPLATE_DIR = path.join(process.resourcesPath, "sample-project");
+}
+const SAMPLE_PROJECT_DIR = path.join(app.getPath("home"), "Voiden", "sample");
+// Helper function to copy a directory recursively
+export async function copyDirectory(src: string, dest: string) {
+  await fs.mkdir(dest, { recursive: true });
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+}
+
+// Ensure sample project directory exists and populate it with default files if necessary
+export async function ensureSampleProject() {
+  try {
+    await copyDirectory(TEMPLATE_DIR, SAMPLE_PROJECT_DIR);
+  } catch (err) {
+    // console.error("Failed to initialize sample project:", err);
+  }
+}
+
+// Load or initialize state
+export async function loadState(skipDefault?:boolean): Promise<AppState> {
+  try {
+    const STATE_FILE = windowManager.getStateFilePath();;
+    const data = await fs.readFile(STATE_FILE, "utf8");
+    const state = JSON.parse(data) as AppState;
+
+    // If the state has no active directory, use the sample project
+    if (!state.activeDirectory) {
+      // console.debug("No active directory found, setting sample project as default.");
+      state.activeDirectory = SAMPLE_PROJECT_DIR;
+      await saveState(state);
+    }
+
+    // If the state doesn't include onboarding, add it and persist the update
+    if (state.onboarding === undefined) {
+      // console.debug("onboarding is missing from state, setting it to false by default.");
+      state.onboarding = false;
+      await saveState(state);
+    }
+
+    // Migration: Add git source control tab if it doesn't exist
+    if (state.sidebars?.left && !state.sidebars.left.tabs.some(tab => tab.type === 'gitSourceControl')) {
+      const gitSourceControlId = crypto.randomUUID();
+      // Insert git tab after file explorer (index 1)
+      state.sidebars.left.tabs.splice(1, 0, {
+        id: gitSourceControlId,
+        type: 'gitSourceControl',
+      });
+      await saveState(state);
+    }
+
+    return state;
+  } catch (err) {
+    // console.warn("Could not load state file, using default state", err);
+
+    // Create a new state with the sample project as the default
+    const defaultState = await getDefaultState(skipDefault);
+    defaultState.activeDirectory = windowManager.getAllWindows().length == 0 && !skipDefault? SAMPLE_PROJECT_DIR : '';
+    defaultState.id = windowManager.activeWindowId;
+    await saveState(defaultState);
+    return defaultState;
+  }
+}
+
+// Save state to file.
+export async function saveState(state: AppState): Promise<void> {
+  const STATE_FILE = windowManager.getStateFilePath();
+  await fs.writeFile(STATE_FILE, JSON.stringify({ ...state }, null, 2), "utf8");
+}
+
+export async function loadSettings(): Promise<AppSettings> {
+  try {
+    // Check if the settings file exists
+    const fileExists = await fs
+      .access(SETTINGS_FILE)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!fileExists) {
+      // console.warn("Settings file not found, creating default settings.");
+      const defaultSettings = getDefaultSettings();
+      await saveSettings(defaultSettings);
+      return defaultSettings;
+    }
+
+    // If the file exists, read and parse it
+    const data = await fs.readFile(SETTINGS_FILE, "utf8");
+    return JSON.parse(data) as AppSettings;
+  } catch (err) {
+    // console.warn("Error reading settings file, creating default settings.", err);
+    const defaultSettings = getDefaultSettings();
+    await saveSettings(defaultSettings);
+    return defaultSettings;
+  }
+}
+
+export async function saveSettings(settings: AppSettings): Promise<void> {
+  await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
+}
+
+async function getDefaultState(skipDefault?:boolean): Promise<AppState | null> {
+  const fileExplorerId = crypto.randomUUID();
+  const gitSourceControlId = crypto.randomUUID();
+  const extensionBrowserId = crypto.randomUUID();
+  const responsePanelId = crypto.randomUUID();
+
+  // Only get sample project if there are no windows
+  if (windowManager.getAllWindows().length === 0 && !skipDefault) {
+    await ensureSampleProject();
+
+    // Create default document only when sample project exists
+    const defaultDocument: Tab = {
+      id: crypto.randomUUID(),
+      type: "document",
+      title: "hello.void",
+      source: `${SAMPLE_PROJECT_DIR}/hello.void`,
+      directory: null,
+    };
+
+    return {
+      activeDirectory: SAMPLE_PROJECT_DIR,
+      onboarding: false,
+      directories: {
+        [SAMPLE_PROJECT_DIR]: {
+          layout: {
+            id: "group",
+            type: "group",
+            children: [
+              {
+                id: "main",
+                type: "panel",
+                tabs: [defaultDocument],
+                activeTabId: defaultDocument.id,
+              },
+              {
+                id: "bottom",
+                type: "panel",
+                tabs: [],
+                activeTabId: null,
+              },
+            ],
+          },
+        },
+      },
+      unsaved: {
+        layout: {
+          id: "group",
+          type: "group",
+          children: [
+            {
+              id: "main",
+              type: "panel",
+              tabs: [defaultDocument],
+              activeTabId: defaultDocument.id,
+            },
+            {
+              id: "bottom",
+              type: "panel",
+              tabs: [],
+              activeTabId: null,
+            },
+          ],
+        },
+        activeEnv: null,
+      },
+      sidebars: {
+        left: {
+          activeTabId: fileExplorerId,
+          tabs: [
+            {
+              id: fileExplorerId,
+              type: "fileExplorer",
+            },
+            {
+              id: gitSourceControlId,
+              type: "gitSourceControl",
+            },
+            {
+              id: extensionBrowserId,
+              type: "extensionBrowser",
+            },
+          ],
+        },
+        right: {
+          activeTabId: responsePanelId,
+          tabs: [
+            {
+              id: responsePanelId,
+              type: "responsePanel",
+            },
+          ],
+        },
+      },
+      extensions: [],
+    };
+  }
+
+  // If there are existing windows, return empty state
+  return {
+    activeDirectory: null,
+    onboarding: true,
+    directories: {},
+    unsaved: {
+      layout: {
+        id: "group",
+        type: "group",
+        children: [
+          {
+            id: "main",
+            type: "panel",
+            tabs: [],
+            activeTabId: null,
+          },
+          {
+            id: "bottom",
+            type: "panel",
+            tabs: [],
+            activeTabId: null,
+          },
+        ],
+      },
+      activeEnv: null,
+    },
+    sidebars: {
+      left: {
+        activeTabId: fileExplorerId,
+        tabs: [
+          {
+            id: fileExplorerId,
+            type: "fileExplorer",
+          },
+          {
+            id: gitSourceControlId,
+            type: "gitSourceControl",
+          },
+          {
+            id: extensionBrowserId,
+            type: "extensionBrowser",
+          },
+        ],
+      },
+      right: {
+        activeTabId: responsePanelId,
+        tabs: [
+          {
+            id: responsePanelId,
+            type: "responsePanel",
+          },
+        ],
+      },
+    },
+    extensions: [],
+  };
+}
+
+function getDefaultSettings(): AppSettings {
+  return {
+    theme: "dark",
+  };
+}
+
+export function getDefaultLayout() {
+  return {
+    id: "group",
+    type: "group",
+    children: [
+      {
+        id: "main",
+        type: "panel",
+        tabs: [],
+        activeTabId: null,
+      },
+      {
+        id: "bottom",
+        type: "panel",
+        tabs: [],
+        activeTabId: null,
+      },
+    ],
+  } as PanelElement;
+}
+
+// Ensure autosave directory exists
+export async function ensureAutosaveDir() {
+  try {
+    await fs.mkdir(AUTOSAVE_DIR, { recursive: true });
+  } catch (err) {
+    // console.error("Failed to create autosave directory:", err);
+  }
+}
+
+// Save unsaved file content to autosave directory
+export async function saveAutosaveFile(tabId: string, content: string): Promise<void> {
+  await ensureAutosaveDir();
+  const filePath = path.join(AUTOSAVE_DIR, `${tabId}.json`);
+  await fs.writeFile(filePath, content, "utf8");
+}
+
+// Load autosaved file content
+export async function loadAutosaveFile(tabId: string): Promise<string | null> {
+  try {
+    const filePath = path.join(AUTOSAVE_DIR, `${tabId}.json`);
+    const content = await fs.readFile(filePath, "utf8");
+    return content;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Delete autosaved file
+export async function deleteAutosaveFile(tabId: string): Promise<void> {
+  try {
+    const filePath = path.join(AUTOSAVE_DIR, `${tabId}.json`);
+    await fs.unlink(filePath);
+  } catch (err) {
+    // File doesn't exist or error deleting, ignore
+  }
+}
+
+// Get all autosaved tab IDs
+export async function getAutosavedTabIds(): Promise<string[]> {
+  try {
+    await ensureAutosaveDir();
+    const files = await fs.readdir(AUTOSAVE_DIR);
+    return files
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.replace(".json", ""));
+  } catch (err) {
+    return [];
+  }
+}
+
+// Clean up autosaved files that are no longer in use
+export async function cleanupAutosaveFiles(activeTabIds: Set<string>): Promise<void> {
+  const autosavedIds = await getAutosavedTabIds();
+  for (const tabId of autosavedIds) {
+    if (!activeTabIds.has(tabId)) {
+      await deleteAutosaveFile(tabId);
+    }
+  }
+}

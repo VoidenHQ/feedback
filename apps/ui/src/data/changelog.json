@@ -1,0 +1,246 @@
+[
+  {
+    "version": "v1.1.0",
+    "date": "23/01/2026",
+    "title": "Multi-Window, Protocol Expansion & Editor Enhancements",
+    "description": "Major release introducing multi-window support, GraphQL protocol support, CLI automation, and significant performance improvements for large OpenAPI specifications.",
+    "icon": "Rocket",
+    "iconColor": "text-purple-500",
+    "bgColor": "bg-gradient-to-br from-purple-900 to-indigo-900",
+    "changes": {
+      "Added": [
+        "Multi-window support to work on multiple files or projects simultaneously",
+        "CLI support for automating API workflows and integrating with CI pipelines",
+        "OpenAPI validation to ensure requests match API specifications and catch issues early",
+        "WebSocket support for testing and documenting WebSocket APIs",
+        "gRPC support for testing and documenting gRPC APIs",
+        "GraphQL support alongside REST, gRPC, and WSS using the same file-based, version-controlled workflow",
+        "Support for uninstalling projects and setting a default directory for project creation",
+        "Editable `.env` files directly within Voiden",
+        "Added shortcut key (Ctrl + .) to open the drag/context menu (Copy, Cut, Delete, etc.)",
+        "Added separate actions for inserting blocks: Add block above (Cmd + Shift + ↑) and Add block below (Cmd + Shift + ↓)"
+      ],
+      "Fixed": [
+        "Resolved performance lag when opening large OpenAPI files caused by unnecessary UI updates",
+        "Resolved issues with importing Postman legacy collections that do not include variables when generating Voiden files",
+        "Fixed Authentication Plugin issues where Basic Auth and OAuth1 encryption failed with environment and runtime variables",
+        "Enabled scrolling on the Changelog and Welcome pages"
+      ],
+      "Changed": [
+        "Optimized rendering performance for large OpenAPI specifications by eliminating inefficient re-renders using React hooks",
+        "Improved handling of imperfect or non-strict API specifications",
+        "Improved text contrast for error messages",
+        "Replaced the single 'Add block' action with two focused options for adding blocks above or below"
+      ]
+    }
+  },
+  {
+    "version": "v1.0.0",
+    "date": "11/11/2025",
+    "title": "First Stable Release",
+    "description": "The foundation is complete. Voiden is now production-ready with comprehensive API testing capabilities, project management, CLI integration, native menus, and extensibility.",
+    "icon": "Rocket",
+    "iconColor": "text-blue-500",
+    "bgColor": "bg-gradient-to-br from-blue-900 to-purple-900",
+    "changes": {
+      "Added": [
+        "Project Support — open, close, and manage multiple projects seamlessly",
+        "Code Block with language selection, syntax highlighting, and inline commenting",
+        "XML Block with full commenting capabilities",
+        "Commenting support for JSON blocks",
+        "JSON element overriding — override specific keys while inheriting the rest of the structure",
+        "Overriding support for headers, query parameters, and form parameters",
+        "Response Body Preview for PDFs, images, videos, and audio files",
+        "Request/Response Summary panel for quick inspection",
+        "Custom Voiden User Agent for outgoing requests",
+        "Comprehensive Settings Panel with theme selection, font selection (with Nerd Font support), adjustable font sizes, proxy configuration, tiered environment variables, update channel selection (Beta/Stable), TLS verification toggle, and auto-save functionality",
+        "Request Execution Pipeline for better control and extensibility",
+        "PowerShell paste support for improved command handling",
+        "Voiden Faker Plugin to generate dynamic test data in requests",
+        "Advanced Auth Plugin with Basic Auth, Token, OAuth 1.0, and OAuth 2.0 support",
+        "Enhanced Voiden REST API plugin for greater reliability and performance",
+        "Refined imported and linked blocks to improve synchronization and consistency",
+        "Improved Markdown Preview extension for smoother rendering",
+        "Redesigned Response Panel for a cleaner, more intuitive layout",
+        "Enhanced Linked Block management for improved editing and referencing",
+        "Added display of Request Headers Sent for better request transparency",
+        "Improved Postman Import Plugin — now supports Postman v2.0 and v2.1 collections",
+        "Secured Environment variable replacement, now handled safely within the Electron process",
+        "Native Menu System — native macOS menu bar with full keyboard shortcut support",
+        "Hamburger menu for Windows/Linux with clean, modern design and auto-hiding menu bar (press Alt to show)",
+        "Custom About Dialog — styled modal with centered logo, branding, and app information",
+        "Windows CMD cURL Support — automatic detection and conversion of Windows CMD vs bash-style cURL with proper escape handling",
+        "Link Block Feature — copy references to blocks and paste them as linked blocks in other documents with cross-file synchronization",
+        "Singleton Block Validation — prevents duplicate singleton blocks (endpoint, JSON, XML, etc.) with user confirmation dialog to replace existing blocks while preserving UIDs",
+        "Cut Block Functionality — cut entire blocks to clipboard and paste them anywhere",
+        "Block Auto-Rendering — automatic rendering of pasted Voiden blocks (with block:// prefix)",
+        "Auto-Save for Unsaved Files — unsaved files (created with Cmd+N) now persist across app restarts, stored in AppData directory",
+        "Command Palette Enhancement — Cmd+Shift+P opens command palette with various productivity commands",
+        "Create Voiden File Command — create new .void files with terminal-like folder autocomplete (Tab key)",
+        "Create File Command — create any file type with extension validation and folder autocomplete",
+        "Create Folder Command — create new folders with path autocomplete",
+        "New Terminal Command — open new terminal tabs via command palette with automatic bottom panel expansion",
+        "Voiden CLI Binary — launch Voiden from terminal with 'voiden' command to open files and folders",
+        "CLI Installation via Settings — one-click CLI installation with automatic symlink creation to /usr/local/bin",
+        "CLI Installation Status Detection — settings automatically detect if CLI is installed on system startup",
+        "CLI Uninstall Option — remove CLI integration from settings when installed",
+        "Git Branch UI Redesign — modern modal dialog with icons, search, and visual feedback matching app design",
+        "Git Branch Creation — create new branches directly from search input with Plus icon indicator",
+        "Git Error Notifications — toast notifications for git checkout/create failures with user-friendly messages",
+        "Git Success Notifications — confirmation toasts when switching or creating branches successfully",
+        "Create Branch Visibility — 'Create branch' option now always visible when typing new branch names",
+        "Enhanced Empty State — clickable create button in git branch dialog when no matches found"
+      ],
+      "Fixed": [
+        "Fixed copy-paste issues in the Voiden editor",
+        "Fixed keyboard shortcut inconsistencies on Windows and Linux systems",
+        "Fixed Cmd+W/Ctrl+W not working when focused inside CodeMirror blocks (CustomCodeBlock, JSON, XML)",
+        "Fixed keyboard shortcuts not working on Windows/Linux after menu implementation",
+        "Fixed case-insensitive header matching in request pipeline",
+        "Fixed backticks rendering issue in editor",
+        "Fixed window update handling for better stability",
+        "Fixed menu bar visibility on different platforms",
+        "Fixed text selection being lost when clicking menu items",
+        "Fixed FileLink (@file.void) deletion with backspace",
+        "Fixed drag-and-drop grip menu click consistency and styling",
+        "Fixed singleton blocks being duplicated via copy/paste",
+        "Fixed Cmd+W not closing terminal tabs in bottom panel",
+        "Fixed bottom panel collapsing when last terminal tab is closed",
+        "Fixed bottom panel not being resizable when opened via command palette",
+        "Fixed autosaved content displaying as raw JSON instead of rendering properly",
+        "Fixed orphaned autosave files cleanup on app startup",
+        "Fixed CLI not opening folders when app is already running — second-instance handler now processes file/folder arguments",
+        "Fixed CLI path resolution — improved absolute/relative path handling in bash launcher script",
+        "Fixed git branch search input focus — auto-focus on dialog open for immediate typing",
+        "Fixed git errors failing silently — all git operations now show error messages to users",
+        "Fixed create branch option being filtered out — moved to Command.Group with proper keywords",
+        "Fixed search box scroll position — corrected positioning for better visibility",
+        "Fixed duplicate request handling — improved request deduplication logic",
+        "Fixed JSON content type handling — better detection of various JSON content-type formats",
+        "Fixed slash command popup on dash input — prevented unwanted command triggers",
+        "Fixed scrolling to active tab on file creation and first load",
+        "Fixed auto-update logic for better reliability"
+      ],
+      "Changed": [
+        "Enhanced grip menu with improved styling, borders, shadows, and separators",
+        "Improved paste validation — validation now happens at paste time instead of copy time",
+        "Linked blocks now use relative paths from project root for better portability",
+        "Menu items properly trigger actions with comprehensive IPC handlers",
+        "Hamburger menu styled to match native system menus with blue selection highlight",
+        "Better keyboard shortcut display in menu items with proper icons",
+        "Keyboard shortcuts (Cmd+W, Cmd+R) now work in both main and bottom panels",
+        "Bottom panel default size changed from 0% to 30% for better resize handle functionality",
+        "Improved folder autocomplete with accent color suggestions for better visibility",
+        "Git branch dialog now matches Command Palette design — dark overlay, rounded corners, shadow, icons",
+        "Git branch items show GitBranch icon — consistent visual language throughout dialog",
+        "Active branch indicator redesigned — green checkmark icon with 'Active' label",
+        "Create branch shows descriptive subtitle — 'Press Enter to create new branch' for clarity",
+        "Error messages are user-friendly — git errors translated to readable messages (e.g., 'uncommitted changes')",
+        "CLI installation auto-syncs settings — actual system state updates settings automatically",
+        "Improved hover states — left border accent on selection for better feedback",
+        "Better keyboard navigation — ESC closes dialog, arrow keys navigate, Enter selects",
+        "Enhanced CLI documentation — better installation instructions for Windows/Linux/macOS"
+      ]
+    }
+  },
+  {
+    "version": "v0.10.7",
+    "date": "8/7/2025",
+    "description": "",
+    "icon": "Code",
+    "iconColor": "text-green-500",
+    "bgColor": "bg-gray-900",
+    "changes": {
+      "Added": [
+        "Added native support for macOS Intel architecture"
+      ],
+      "Fixed": [
+        "Fixed issue with opening links in the in-app browser instead of the default browser.",
+        "Resolved problems with the 'Duplicate File' option in the file explorer context menu",
+        "Corrected issues with the 'Request Snapshot' feature in the response panel viewer",
+        "Resolved the issue of not being able to retry requests when the API is not accessible."
+      ]
+    }
+  },
+  {
+    "version": "v0.10.6",
+    "date": "27/6/2025",
+    "description": "",
+    "icon": "Braces",
+    "iconColor": "text-purple-500",
+    "bgColor": "bg-gray-900",
+    "changes": {
+      "Added": [
+        "Displayed app version in the UI footer for easier reference and debugging",
+        "Added 'Duplicate File' option to the file explorer context menu",
+        "Introduced 'Request Snapshot' feature in the response panel to capture the full state of a response",
+        "Released official Linux support with downloadable .deb and .rpm installers"
+      ],
+      "Fixed": []
+    }
+  },
+  {
+    "version": "v0.10.5",
+    "date": "7/6/2025",
+    "description": "",
+    "icon": "Code",
+    "iconColor": "text-green-500",
+    "bgColor": "bg-gray-800",
+    "changes": {
+      "Added": [
+        "In-app changelog viewer",
+        "In-app links to Discord community and GitHub repository"
+      ],
+      "Fixed": [
+        "Resolved sync issues with large markdown documents",
+        "Resolved issues with invalid markdown documents",
+        "Fixed errors related to the JSON block and request execution",
+        "Fixed the tab scroll issue on Windows and Linux",
+        "Fixed hotkey combinations to behave correctly based on the OS",
+        "Fixed the response headers table to reliably display key/value pairs in all cases",
+        "Fixed newline indentation in the JSON block",
+        "Fixed autofocus on JSON blocks"
+      ]
+    }
+  },
+  {
+    "version": "v0.9.30",
+    "date": "1/5/2025",
+    "description": "Enhanced Terminal Support & Markdown Engine",
+    "icon": "Terminal",
+    "iconColor": "text-green-500",
+    "bgColor": "bg-gray-800",
+    "changes": {
+      "Added": [
+        "Full Voiden Terminal CLI for offline editing and scripting",
+        "Real-time Markdown preview with enhanced renderer",
+        "Support for custom markdown extensions in `.void` files"
+      ],
+      "Fixed": [
+        "Resolved sync issues with large markdown documents",
+        "Improved terminal input responsiveness"
+      ]
+    }
+  },
+  {
+    "version": "v0.9.25",
+    "date": "22/12/2024",
+    "description": "Extension Support + Plugin Improvements",
+    "icon": "Plug",
+    "iconColor": "text-purple-500",
+    "bgColor": "bg-gray-900",
+    "changes": {
+      "Added": [
+        "Extension framework for community-built plugins",
+        "file attachment support inside blocks",
+        "Pre-built plugins for Mermaid, Charts, and Swagger rendering"
+      ],
+      "Changed": [
+        "Plugin loading performance improved"
+      ],
+      "Fixed": [
+        "Fixed plugin unmount bugs"
+      ]
+    }
+  }
+]

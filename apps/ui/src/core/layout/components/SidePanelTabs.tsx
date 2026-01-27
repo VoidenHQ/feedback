@@ -1,0 +1,134 @@
+import React, { useEffect } from "react";
+import { Files, ArrowDownUp, Blocks, Search, GitBranch, icons } from "lucide-react";
+import { cn } from "@/core/lib/utils";
+import { useGetSidebarTabs, useActivateSidebarTab } from "@/core/layout/hooks";
+import { usePluginStore } from "@/plugins";
+import { useSearchStore } from "@/core/stores/searchStore";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { Kbd } from "@/core/components/ui/kbd";
+
+const sidebarTabIconMap = {
+  fileExplorer: <Files size={14} />,
+  responsePanel: <ArrowDownUp size={14} />,
+  extensionBrowser: <Blocks size={14} />,
+  gitSourceControl: <GitBranch size={14} />,
+};
+
+// Helper to safely render lucide icons
+const renderLucideIcon = (iconName: string | undefined, size: number = 14) => {
+  if (!iconName) {
+    return <Blocks size={size} />;
+  }
+
+  // @ts-expect-error - Dynamic icon access
+  const IconComponent = icons[iconName];
+
+  if (!IconComponent) {
+    // console.warn(`Icon "${iconName}" not found in lucide-react, using fallback`);
+    return <Blocks size={size} />;
+  }
+
+  return <IconComponent size={size} />;
+};
+
+export const SidePanelTabs = ({ side }: { side: "left" | "right" }) => {
+  const { data: sidebarTabs } = useGetSidebarTabs(side);
+  const pluginTabs = usePluginStore((state) => state.sidebar[side]);
+  const activateTab = useActivateSidebarTab();
+
+  const storeIsSearching = useSearchStore((state) => state.isSearching);
+  const setStoreIsSearching = useSearchStore((state) => state.setIsSearching);
+
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      // Don't trigger if focus is in a CodeMirror editor
+      const target = e.target as HTMLElement;
+      if (target?.closest('.cm-editor, .txt-editor')) {
+        return;
+      }
+
+      // Shift + Cmd/Ctrl + F
+      if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        // toggle the search state
+        setStoreIsSearching((prev) => !prev);
+        // activate the first tab (where the search button lives)
+        if (sidebarTabs?.tabs?.length) {
+          activateTab.mutate({ sidebarId: side, tabId: sidebarTabs.tabs[0].id });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleShortcut);
+    };
+  }, [activateTab, setStoreIsSearching, side, sidebarTabs]);
+
+  const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+  // Return null if no tabs exist or sidebarTabs is undefined
+  if (!sidebarTabs?.tabs?.length) {
+    return null;
+  }
+
+  return (
+    <div className="h-8 border-b border-border flex items-center bg-bg">
+      {sidebarTabs.tabs.map((tab: { id: string; type: string; meta?: any }, idx: number) => {
+        const extensionTab = tab.type === "custom" ? pluginTabs?.find((t) => t.id === tab.meta.customTabKey) : null;
+        // Skip rendering if it's an extension tab but no matching plugin tab is found
+        if (tab.type === "custom" && !extensionTab) {
+          return null;
+        }
+
+        return (
+          <React.Fragment key={tab.id}>
+            <button
+              onClick={() => {
+                activateTab.mutate({ sidebarId: side, tabId: tab.id });
+                setStoreIsSearching(false);
+              }}
+              className={cn(
+                "px-2 h-full flex items-center justify-center hover:bg-active",
+                sidebarTabs.activeTabId === tab.id && !storeIsSearching && "bg-active",
+              )}
+            >
+              {tab.type === "custom" && extensionTab
+                ? renderLucideIcon(extensionTab.icon, 14)
+                : sidebarTabIconMap[tab.type as keyof typeof sidebarTabIconMap]}
+            </button>
+            {idx === 0 && side === "left" && (
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={() => {
+                      setStoreIsSearching(!storeIsSearching);
+                      activateTab.mutate({ sidebarId: side, tabId: tab.id });
+                    }}
+                    className={cn(
+                      "px-2 h-full flex items-center justify-center hover:bg-active",
+                      sidebarTabs.activeTabId === tab.id && storeIsSearching && "bg-active",
+                    )}
+                  >
+                    <Search size={14} />
+                  </button>
+                </Tooltip.Trigger>
+
+                <Tooltip.Content
+                  align="start"
+                  sideOffset={4}
+                  alignOffset={4}
+                  side="bottom"
+                  className="border flex items-center gap-2 text-comment bg-panel border-border p-1 text-sm z-10"
+                >
+                  <span>Search</span>
+                  <Kbd keys="⇧⌘F" size="sm"></Kbd>
+                </Tooltip.Content>
+              </Tooltip.Root>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
+export default SidePanelTabs;

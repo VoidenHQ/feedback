@@ -1,0 +1,33 @@
+{
+  "appearance": {
+    "theme": "voiden",
+    "font_size": 15,
+    "font_family": "Inconsolata",
+    "cursor_type": "text",
+    "code_wrap": true
+  },
+  "editor": {
+    "auto_save": false,
+    "auto_save_delay": 10
+  },
+  "requests": {
+    "disable_tls_verification": false
+  },
+  "proxy": {
+    "enabled": false,
+    "proxies": []
+  },
+  "terminal": {
+    "use_nerd_font": false,
+    "nerd_font_installed": false
+  },
+  "updates": {
+    "channel": "stable"
+  },
+  "environment": {
+    "use_hierarchy": true
+  },
+  "cli": {
+    "installed": false
+  }
+}

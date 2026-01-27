@@ -1,0 +1,179 @@
+import { cn } from "@/core/lib/utils";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { Command } from "cmdk";
+import { useEffect, useState } from "react";
+import { useEnvironments, useSetActiveEnvironment } from "@/core/environment/hooks";
+import { ChevronRight, FileText, Ban, Check } from "lucide-react";
+import { Kbd } from "@/core/components/ui/kbd";
+
+export const EnvSelector = () => {
+  const { data: envs } = useEnvironments();
+  const { mutate: setActiveEnv } = useSetActiveEnvironment();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      // Don't trigger if focus is in a CodeMirror editor
+      const target = e.target as HTMLElement;
+      if (target?.closest('.cm-editor, .txt-editor')) {
+        return;
+      }
+
+      // ⌥⌘E (Mac) or Alt+Ctrl+E (Windows/Linux) to toggle
+      const isMac = navigator.platform ? navigator.platform.toLowerCase().includes('mac') : false;
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+      if (e.code === "KeyE" && modKey && e.altKey) {
+        e.preventDefault();
+        setOpen((open) => !open);
+      }
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+      }
+
+    };
+
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [open]);
+
+  const handleEnvSelect = (envPath: string) => {
+    setActiveEnv(envPath);
+    setOpen(false);
+  };
+  const [search, setSearch] = useState("");
+
+  if (!envs) return null;
+  return (
+    <>
+      <div className="px-1">
+        <ChevronRight size={14} className="text-comment" />
+      </div>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <button
+            className={cn("text-sm h-full px-2 flex items-center gap-2 hover:bg-active no-drag", !envs?.activeEnv && "text-comment")}
+            onClick={() => setOpen(true)}
+          >
+            <span>{envs?.activeEnv ? envs?.activeEnv.replace(/\\/g, "/").split("/").pop() : "No environment"}</span>
+          </button>
+        </Tooltip.Trigger>
+        <Tooltip.Content
+          align="start"
+          sideOffset={4}
+          alignOffset={4}
+          side="top"
+          className="border bg-panel border-border p-1 text-sm z-20 text-comment flex items-center gap-2"
+        >
+          <span>Select an environment</span>
+          <Kbd keys="⌥⌘E" size="sm" />
+        </Tooltip.Content>
+      </Tooltip.Root>
+      {
+        open && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-start justify-center pt-[20vh] bg-black/50"
+            onClick={() => setOpen(false)}
+          >
+            <div className="w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+
+              <Command
+                label="Select Environment"
+                className="bg-editor border border-border rounded-lg shadow-lg overflow-hidden"
+              >
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-border">
+                  <span className="flex ">
+                    <h2 className="text-base font-semibold text-text">Select Environment</h2>
+                    <span className="text-xs text-comment ml-auto">ESC to close</span>
+                  </span>
+                  <p className="text-xs text-comment mt-0.5">Choose which environment variables to use</p>
+                </div>
+
+                {/* Search Input */}
+                <div className="px-3 py-2 border-b border-border">
+                  <Command.Input
+                    className="w-full border-none h-8 px-2 text-sm bg-editor rounded text-text outline-none placeholder:text-comment"
+                    placeholder="Search environments..."
+                    onValueChange={setSearch}
+                    onMouseDown={(e)=>{
+                      e.stopPropagation()
+                    }}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Environment List */}
+                <Command.List className="max-h-[400px] overflow-y-auto p-2">
+                  <Command.Empty className="py-6 text-center text-comment text-sm">No environments found</Command.Empty>
+
+                  <Command.Group>
+                    {/* Option to clear environment */}
+                    <Command.Item
+                      value="none"
+                      keywords={["none", "clear", "disable", "no"]}
+                      className="cursor-pointer px-3 py-2.5 rounded-md mb-1 text-text data-[selected=true]:bg-active hover:bg-active flex items-center gap-3 outline-none"
+                      onSelect={() => handleEnvSelect("")}
+                    >
+                      <Ban size={16} className="text-comment flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">None</div>
+                        <div className="text-xs text-comment">No environment variables</div>
+                      </div>
+                      {(!envs.activeEnv || envs.activeEnv === "") && (
+                        <Check size={16} className="flex-shrink-0" style={{ color: 'var(--icon-success)' }} />
+                      )}
+                    </Command.Item>
+
+                    {/* Render available environments */}
+                    {envs?.data &&
+                      Object.entries(envs.data).filter(([fileName])=>{
+                       const normalizedPath = fileName.replace(/\\/g, "/");
+                       const projectName = normalizedPath.split("/").pop()||normalizedPath;
+                       return projectName.toLowerCase().includes(search.toLowerCase());
+                    }).map(([fileName]) => {
+                        const displayName = fileName.replace(/\\/g, "/").split("/").pop() || fileName;
+                        const isActive = fileName === envs.activeEnv;
+                        
+                        return (
+                          <Command.Item
+                            key={fileName}
+                            value={fileName}
+                            className="cursor-pointer px-3 py-2.5 rounded-md mb-1 text-text data-[selected=true]:bg-active hover:bg-active flex items-center gap-3 outline-none"
+                            onSelect={() => handleEnvSelect(fileName)}
+                          >
+                            <FileText size={16} className="flex-shrink-0" style={{ color: 'var(--icon-primary)' }} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium truncate">{displayName}</div>
+                              <div className="text-xs text-comment truncate">{fileName}</div>
+                            </div>
+                            {isActive && (
+                              <Check size={16} className="flex-shrink-0" style={{ color: 'var(--icon-success)' }} />
+                            )}
+                          </Command.Item>
+                        );
+                      })}
+                  </Command.Group>
+                </Command.List>
+
+                {/* Footer with keyboard hint */}
+                <div className="px-4 py-2 border-t border-border bg-editor/50">
+                  <div className="flex items-center justify-between text-comment">
+                    <span className="text-sm">Use ↑↓ to navigate</span>
+                    <span className="flex items-center gap-1.5">
+                      <Kbd keys="⌥⌘E" size="sm" />
+                      <span className="text-sm">to toggle</span>
+                    </span>
+                  </div>
+                </div>
+              </Command>
+            </div>
+          </div>
+        )
+      }
+
+    </>
+  );
+};
