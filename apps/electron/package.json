@@ -4,10 +4,10 @@
   "version": "1.1.0",
   "private": true,
   "author": {
-    "name": "ApyHub",
-    "email": "hello@apyhub.com"
+    "name": "Voiden",
+    "email": "info@voiden.md"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "description": "Build, Test, Document & Collaborate. Streamline your API development process with Voiden",
   "main": ".vite/build/main.js",
   "scripts": {

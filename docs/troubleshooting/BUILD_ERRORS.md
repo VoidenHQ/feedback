@@ -39,6 +39,9 @@ During a fresh install or build on Windows, the `node-pty` package may fail to c
 4. **Continue with the build**: After the rebuild succeeds, continue with the normal build process:
    ```bash
    yarn workspace @voiden/core-extensions build
+
+   # Start the Electron app in development mode
+   cd apps/electron && yarn start
    ```
 
 ### Why This Happens

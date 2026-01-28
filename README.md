@@ -70,10 +70,12 @@ Thanks for sharing your thoughts with us 💜
 ```bash
 git clone https://github.com/VoidenHQ/voiden.git
 cd voiden
-yarn install
+yarn install 
 yarn workspace @voiden/core-extensions build
 cd apps/electron && yarn start
 ```
+> Note : `yarn install` may fail on Windows due to a non-PTY build issue.
+See the troubleshooting guide: [Build Errors (Windows)](/docs/troubleshooting/BUILD_ERRORS.md)
 
 See the [Full Installation Guide](docs/getting-started/FRESH_INSTALL.md) for detailed setup including Windows requirements.
 

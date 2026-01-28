@@ -1,0 +1,49 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.env
+.env.*
+.scratch
+**/.env*
+# But keep these specific ones for examples..
+!apps/electron/src/sample-project/.env
+!apps/electron/src/sample-project/.env.local
+
+# electron build target
+out
+.vite
+
+/apps/cli/tokensInfo.json
+/apps/cli/environmentInfo.json
+tokensInfo.json# Font files
+\!apps/ui/public/fonts/*.woff2
