@@ -7,9 +7,11 @@ import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { getAppUpdateYml } from "electron-updater-yaml";
 import dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 
 dotenv.config({ path: "../../.env" });
 
@@ -21,6 +23,45 @@ const isLinux = process.platform === "linux";
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf-8"));
 const version = packageJson.version;
 const isBetaBuild = version.includes("beta") || version.includes("alpha") || version.includes("rc");
+
+// Helper function to calculate SHA512 hash of a file
+function calculateSha512(filePath: string): string {
+  const fileBuffer = fs.readFileSync(filePath);
+  const hash = crypto.createHash("sha512");
+  hash.update(fileBuffer);
+  return hash.digest("base64");
+}
+
+// Helper function to generate latest-mac.yml or latest.yml for electron-updater
+function generateUpdateYml(artifactPath: string, version: string, platform: "darwin" | "win32", _arch: string): string {
+  const fileName = path.basename(artifactPath);
+  const fileSize = fs.statSync(artifactPath).size;
+  const sha512 = calculateSha512(artifactPath);
+  const releaseDate = new Date().toISOString();
+
+  if (platform === "darwin") {
+    return `version: ${version}
+files:
+  - url: ${fileName}
+    sha512: ${sha512}
+    size: ${fileSize}
+path: ${fileName}
+sha512: ${sha512}
+releaseDate: '${releaseDate}'
+`;
+  } else {
+    // Windows
+    return `version: ${version}
+files:
+  - url: ${fileName}
+    sha512: ${sha512}
+    size: ${fileSize}
+path: ${fileName}
+sha512: ${sha512}
+releaseDate: '${releaseDate}'
+`;
+  }
+}
 
 // Detect release channel (beta or stable)
 // Priority: 1) RELEASE_CHANNEL env var, 2) version number detection, 3) default to stable
@@ -104,6 +145,58 @@ if (isMac) {
 }
 
 const config: ForgeConfig = {
+  hooks: {
+    // Generate app-update.yml in the packaged app's resources directory
+    // This tells electron-updater where to check for updates (without needing electron-builder)
+    packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
+      if (platform !== "darwin" && platform !== "win32") return;
+
+      const resourcesPath = path.resolve(buildPath, "..");
+      const yml = await getAppUpdateYml({
+        name: "Voiden",
+        url: `https://voiden.apyverse.dev/api/download/${releaseChannel}/${platform}/${arch}`,
+        updaterCacheDirName: "voiden-updater",
+      });
+
+      fs.writeFileSync(path.join(resourcesPath, "app-update.yml"), yml);
+      console.log(`Generated app-update.yml in ${resourcesPath}`);
+    },
+    postMake: async (_config, makeResults) => {
+      for (const result of makeResults) {
+        const { platform, arch, artifacts } = result;
+
+        // Find the main artifact (zip for mac, exe/nupkg for windows)
+        for (const artifactPath of artifacts) {
+          const fileName = path.basename(artifactPath);
+          const artifactDir = path.dirname(artifactPath);
+
+          // Generate latest-mac.yml for macOS zip files
+          if (platform === "darwin" && fileName.endsWith(".zip") && !fileName.includes("RELEASES")) {
+            const ymlContent = generateUpdateYml(artifactPath, version, "darwin", arch);
+            const ymlPath = path.join(artifactDir, `latest-mac.yml`);
+            fs.writeFileSync(ymlPath, ymlContent);
+            console.log(`Generated: ${ymlPath}`);
+
+            // Also add the yml file to artifacts so it gets published
+            result.artifacts.push(ymlPath);
+          }
+
+          // Generate latest.yml for Windows exe files
+          if (platform === "win32" && (fileName.endsWith(".exe") || fileName.endsWith("Setup.exe"))) {
+            const ymlContent = generateUpdateYml(artifactPath, version, "win32", arch);
+            const ymlPath = path.join(artifactDir, `latest.yml`);
+            fs.writeFileSync(ymlPath, ymlContent);
+            console.log(`Generated: ${ymlPath}`);
+
+            // Also add the yml file to artifacts so it gets published
+            result.artifacts.push(ymlPath);
+          }
+        }
+      }
+
+      return makeResults;
+    },
+  },
   packagerConfig: {
     extraResource: ["src/sample-project", "splash.html", "logo-dark.png", "background.png", "default.settings.json", "public/fonts", "themes", "bin", "src/images/icon.png"],
     extendInfo: "./info.plist",

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { globalSaveFile } from "@/core/file-system/hooks";
 import { useLoadEnv, useSetActiveEnv } from "@/core/environment/hooks";
 import { reloadAllTabs } from "@/core/git/hooks/useGit";
+import { toast } from "sonner";
 
 // Define the shape of our context.
 interface ElectronEventContextType {
@@ -181,6 +182,21 @@ export const ElectronEventProvider: React.FC<{ children: React.ReactNode }> = ({
       },
       "settings:changed": () => {
         handleEvent('settings:changed', {});
+      },
+      "toast:show": (event: any, data: any) => {
+        toast(data.title, { description: data.description || undefined,duration: data.duration || 4000 ,closeButton:true});
+      },
+      "toast:error": (event: any, data: any) => {
+        toast.error(data.title, { description: data.description || undefined,duration: data.duration || 4000 ,closeButton:true});
+      },
+      "toast:warning": (event: any, data: any) => {
+        toast.warning(data.title, { description: data.description || undefined,duration: data.duration || 4000 ,closeButton:true});
+      },
+      "toast:success": (event: any, data: any) => {
+        toast.success(data.title, { description: data.description || undefined,duration: data.duration || 4000,closeButton:true });
+      },
+      "toast:info": (event: any, data: any) => {
+        toast.info(data.title, { description: data.description || undefined,duration: data.duration || 4000 ,closeButton:true} );
       }
     };
 
