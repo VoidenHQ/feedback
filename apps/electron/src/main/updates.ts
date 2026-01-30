@@ -5,6 +5,7 @@ import path from "node:path";
 import * as semver from "semver";
 import * as https from "https";
 import { execFile } from "child_process";
+import { windowManager } from "./windowManager";
 
 // Update state management
 enum UpdateState {
@@ -25,8 +26,8 @@ function setUpdateState(state: UpdateState) {
 
 function isUpdateInProgress(): boolean {
   return currentUpdateState === UpdateState.CHECKING ||
-         currentUpdateState === UpdateState.DOWNLOADING ||
-         currentUpdateState === UpdateState.INSTALLING;
+    currentUpdateState === UpdateState.DOWNLOADING ||
+    currentUpdateState === UpdateState.INSTALLING;
 }
 
 function isUpdateSupported(): boolean {
@@ -36,7 +37,7 @@ function isUpdateSupported(): boolean {
 
 function sendUpdateProgressToWindows(progress: { percent?: number; bytesPerSecond?: number; transferred?: number; total?: number; status: string }) {
   if (!isUpdateSupported()) return;
-  
+
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("update:progress", progress);
   }
@@ -64,14 +65,11 @@ function detectLinuxPackageType(): "deb" | "rpm" | "appimage" {
   return "rpm";
 }
 
-function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage") {
+function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage", maxRedirects = 5) {
   if (isUpdateInProgress()) {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-      window.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
-    } else {
-    dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
-    }
+    setUpdateState(UpdateState.IDLE);
+    const win = windowManager.browserWindow ?? BrowserWindow.getAllWindows()[0];
+    win?.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
     return;
   }
 
@@ -88,52 +86,88 @@ function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage"
   setUpdateState(UpdateState.DOWNLOADING);
   sendUpdateProgressToWindows({ status: "downloading", percent: 0 });
 
-  https
-    .get(url, requestOptions, (response) => {
-      if (response.statusCode !== 200) {
+  let redirectCount = 0;
+
+  function doDownload(downloadUrl: string) {
+    https
+      .get(downloadUrl, requestOptions, (response) => {
+        // Handle redirects
+        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          redirectCount++;
+          if (redirectCount > maxRedirects) {
+            setUpdateState(UpdateState.ERROR);
+            const window = BrowserWindow.getFocusedWindow();
+            if (window) {
+              window.webContents.send("toast:error", { title: "Update Download Failed", description: "Too many redirects while downloading update.", duration: 5000 });
+            } else {
+              dialog.showErrorBox("Download Failed", "Too many redirects while downloading update.");
+            }
+            return;
+          }
+          doDownload(response.headers.location);
+          return;
+        }
+
+        if (response.statusCode !== 200) {
+          setUpdateState(UpdateState.ERROR);
+          const window = BrowserWindow.getFocusedWindow();
+          if (window) {
+            window.webContents.send("toast:error", { title: "Update Download Failed", description: `Failed to download update: ${response.statusCode}`, duration: 5000 });
+          } else {
+            dialog.showErrorBox("Download Failed", `Failed to download update: ${response.statusCode}`);
+          }
+          return;
+        }
+
+        const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+        let lastTime = Date.now();
+        let lastBytes = 0;
+        let bytesPerSecond = 0;
+
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+
+          const now = Date.now();
+          const elapsed = (now - lastTime) / 1000;
+          if (elapsed >= 0.5) {
+            bytesPerSecond = Math.round((downloadedBytes - lastBytes) / elapsed);
+            lastTime = now;
+            lastBytes = downloadedBytes;
+          }
+
+          if (totalBytes > 0) {
+            const percent = Math.round((downloadedBytes / totalBytes) * 100);
+            sendUpdateProgressToWindows({
+              status: "downloading",
+              percent,
+              bytesPerSecond,
+              transferred: downloadedBytes,
+              total: totalBytes
+            });
+          }
+        });
+
+        response.pipe(file);
+        file.on("finish", () => {
+          file.close(() => {
+            setUpdateState(UpdateState.INSTALLING);
+            installPackage(tmpPath, type);
+          });
+        });
+      })
+      .on("error", (err) => {
         setUpdateState(UpdateState.ERROR);
         const window = BrowserWindow.getFocusedWindow();
         if (window) {
-          window.webContents.send("toast:error", { title: "Update Download Failed", description: `Failed to download update: ${response.statusCode}`, duration: 5000 });
+          window.webContents.send("toast:error", { title: "Download Error", description: `${err.message}`, duration: 5000 });
         } else {
-        dialog.showErrorBox("Download Failed", `Failed to download update: ${response.statusCode}`);
-        }
-        return;
-      }
-
-      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
-      let downloadedBytes = 0;
-
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (totalBytes > 0) {
-          const percent = Math.round((downloadedBytes / totalBytes) * 100);
-          sendUpdateProgressToWindows({ 
-            status: "downloading", 
-            percent,
-            transferred: downloadedBytes,
-            total: totalBytes
-          });
+          dialog.showErrorBox("Download Error", err.message);
         }
       });
+  }
 
-      response.pipe(file);
-      file.on("finish", () => {
-        file.close(() => {
-          setUpdateState(UpdateState.INSTALLING);
-          installPackage(tmpPath, type);
-        });
-      });
-    })
-    .on("error", (err) => {
-      setUpdateState(UpdateState.ERROR);
-      const window = BrowserWindow.getFocusedWindow();
-      if (window) {
-        window.webContents.send("toast:error", { title: "Download Error", description: `${err.message}`, duration: 5000 });
-      } else {
-      dialog.showErrorBox("Download Error", err.message);
-      }
-    });
+  doDownload(url);
 }
 
 function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
@@ -146,7 +180,7 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
         if (window) {
           window.webContents.send("toast:error", { title: "Installation Failed", description: `Failed to make AppImage executable: ${chmodErr.message}`, duration: 5000 });
         } else {
-        dialog.showErrorBox("Installation Failed", `Failed to make AppImage executable: ${chmodErr.message}`);
+          dialog.showErrorBox("Installation Failed", `Failed to make AppImage executable: ${chmodErr.message}`);
         }
         return;
       }
@@ -183,7 +217,7 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
       if (window) {
         window.webContents.send("toast:error", { title: "Installation Failed", description: `${error.message}\n\n${stderr}`, duration: 5000 });
       } else {
-      dialog.showErrorBox("Installation Failed", `${error.message}\n\n${stderr}`);
+        dialog.showErrorBox("Installation Failed", `${error.message}\n\n${stderr}`);
       }
       return;
     }
@@ -207,12 +241,9 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
 
 function checkForLinuxUpdate(currentVersion: string, channel: "stable" | "early-access" = "stable") {
   if (isUpdateInProgress()) {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-      window.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
-    } else {
-    dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
-    }
+      setUpdateState(UpdateState.IDLE);
+    const win = windowManager.browserWindow ?? BrowserWindow.getAllWindows()[0];
+    win?.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
     return;
   }
 
@@ -305,31 +336,31 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
     // Choose channel path based on channel preference
     const channelPath = channel === "early-access" ? "beta" : "stable";
 
-     // Configure electron-updater
-        autoUpdater.autoDownload = true;
-        autoUpdater.autoInstallOnAppQuit = true;
-        autoUpdater.setFeedURL({
-          provider: "generic",
-          url: `https://voiden.apyverse.dev/api/download/${channelPath}/${platform}/${arch}`,
+    // Configure electron-updater
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: `https://voiden.apyverse.dev/api/download/${channelPath}/${platform}/${arch}`,
+    });
+
+    // Check for updates after app is ready, then periodically
+    app.whenReady().then(() => {
+      setTimeout(() => {
+        autoUpdater.checkForUpdates().catch((err: Error) => {
+          console.error("Auto update check failed:", err);
         });
-    
-        // Check for updates after app is ready, then periodically
-        app.whenReady().then(() => {
-          setTimeout(() => {
-            autoUpdater.checkForUpdates().catch((err: Error) => {
-              console.error("Auto update check failed:", err);
-            });
-          }, 10_000);
-    
-          // Check for updates every hour
-          setInterval(() => {
-            if (!isUpdateInProgress()) {
-              autoUpdater.checkForUpdates().catch((err: Error) => {
-                console.error("Periodic update check failed:", err);
-              });
-            }
-          }, 60 * 60 * 1000);
-        });
+      }, 10_000);
+
+      // Check for updates every hour
+      setInterval(() => {
+        if (!isUpdateInProgress()) {
+          autoUpdater.checkForUpdates().catch((err: Error) => {
+            console.error("Periodic update check failed:", err);
+          });
+        }
+      }, 60 * 60 * 1000);
+    });
   } else if (platform === "linux") {
     app.whenReady().then(() => {
       setTimeout(() => {
@@ -343,12 +374,9 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
 export function checkForUpdatesManually(channel: "stable" | "early-access" = "stable"): Promise<{ available: boolean; version?: string }> {
   return new Promise((resolve) => {
     if (isUpdateInProgress()) {
-      const window = BrowserWindow.getFocusedWindow();
-      if (window) {
-        window.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
-      } else {
-      dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
-      }
+        setUpdateState(UpdateState.IDLE);
+      const win = windowManager.browserWindow ?? BrowserWindow.getAllWindows()[0];
+      win?.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
       resolve({ available: false });
       return;
     }
@@ -542,7 +570,7 @@ function setupAutoUpdaterListeners() {
     } else if (window) {
       window.webContents.send("toast:error", { title: "Update Error", description: `Failed to download update: ${error.message}`, duration: 5000 });
     } else {
-    dialog.showErrorBox("Update Error", `Failed to download update: ${error.message}`);
+      dialog.showErrorBox("Update Error", `Failed to download update: ${error.message}`);
     }
   });
 }
@@ -567,13 +595,9 @@ export function registerUpdateIpcHandlers() {
 
     // Check if update is already in progress
     if (isUpdateInProgress()) {
-      dialog.showMessageBox({
-        type: "warning",
-        buttons: ["OK"],
-        title: "Update In Progress",
-        message: "An update is already in progress.",
-        detail: "Please wait for the current update to complete before checking for updates again.",
-      });
+        setUpdateState(UpdateState.IDLE);
+      const win = windowManager.browserWindow ?? BrowserWindow.getAllWindows()[0];
+      win?.webContents.send("toast:info", { title: "Update In Progress", description: "An update is already in progress. Please wait for it to complete.", duration: 5000 });
       return { available: false, inProgress: true };
     }
 
@@ -625,7 +649,7 @@ export function registerUpdateIpcHandlers() {
                 if (window) {
                   window.webContents.send("toast:warning", { title: "Update Error", description: `Update not available for ${packageTypeLabel} format.`, duration: 5000 });
                 } else {
-                dialog.showErrorBox("Update Error", `Update not available for ${packageTypeLabel} format.`);
+                  dialog.showErrorBox("Update Error", `Update not available for ${packageTypeLabel} format.`);
                 }
                 return;
               }
