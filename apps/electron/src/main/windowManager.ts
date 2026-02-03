@@ -165,15 +165,17 @@ class WindowManager {
       this.setActiveWindowId(id);
 
       // Try to restore state
-      await initializeState(skipDefault);
+      const initializedState = await initializeState(skipDefault);
       const savedState = await this.loadWindowState(id);
-      this.windows.set(id, savedState);
+      // Use savedState if available, otherwise fall back to the initialized state
+      this.windows.set(id, savedState || initializedState);
       this.browserWindow = win;
       this.browserWindows.set(id, win);
 
+      const state = this.windows.get(id);
       // If restored state has activeDirectory, set it up
-      if (savedState?.activeDirectory) {
-        await this.setActiveDirectory(id, savedState.activeDirectory);
+      if (state?.activeDirectory) {
+        await this.setActiveDirectory(id, state.activeDirectory);
       }
       // Attach window info
       win.windowInfo = {
@@ -197,6 +199,7 @@ class WindowManager {
 
       this.register(win, id);
     } catch (e) {
+      console.error("Failed to initialize window:", e);
     }
 
     return win;
