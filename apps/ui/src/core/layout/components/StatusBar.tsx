@@ -55,7 +55,7 @@ export const StatusBar = ({
   useEffect(() => {
     const unsubscribe = window.electron?.onUpdateProgress?.((progress) => {
       setUpdateProgress(progress);
-      
+
       // Clear progress after completion or error
       if (progress.status === "installed" || progress.status === "error" || progress.status === "idle") {
         setTimeout(() => setUpdateProgress(null), 3000);
@@ -81,7 +81,7 @@ export const StatusBar = ({
 
       if (event.code === "KeyD" && modKey && event.altKey) {
         event.preventDefault();
-        setIsCompareDialogOpen((open)=>!open);
+        setIsCompareDialogOpen((open) => !open);
         return;
       }
       if (target?.closest('.cm-editor, .txt-editor')) {
@@ -165,9 +165,12 @@ export const StatusBar = ({
               </Tooltip.Trigger>
               <Tooltip.Content align="start" sideOffset={4} alignOffset={4} side="top" className="border bg-panel border-border p-2 text-sm z-10 text-comment">
                 {updateProgress.status === "checking" && <span>Checking for updates...</span>}
-                {updateProgress.status === "downloading" && updateProgress.percent !== undefined && (
+                {updateProgress.status === "downloading" && (
                   <div className="space-y-1">
-                    <div>Downloading in progress...</div>
+                    <div>
+                      <div className="text-[10px] text-text">Downloaded : <span className="text-active">{((updateProgress.transferred || 0) / 1024 / 1024).toFixed(1)} MB / {((updateProgress.total || 0) / 1024 / 1024).toFixed(1)} MB</span></div>
+                      <div className="text-[10px] text-text">Speed : <span className="text-active">{((updateProgress.bytesPerSecond || 0) / 1024 / 1024).toFixed(1)} MB/s</span></div>
+                    </div>
                   </div>
                 )}
                 {updateProgress.status === "ready" && <span>Update downloaded and ready to install</span>}

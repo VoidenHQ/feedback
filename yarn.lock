@@ -9816,6 +9816,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"builder-util-runtime@npm:9.5.1":
+  version: 9.5.1
+  resolution: "builder-util-runtime@npm:9.5.1"
+  dependencies:
+    debug: "npm:^4.3.4"
+    sax: "npm:^1.2.4"
+  checksum: 10c0/b6f95e18d7f6201f95b42658bb7c8e2d29f96d6beeef64c4c9f54ff9d71e6459ca55f325512da9fea23378b9804fcade8fcad88dab81ba3f96958c86492a2ca9
+  languageName: node
+  linkType: hard
+
 "builder-util@npm:24.13.1":
   version: 24.13.1
   resolution: "builder-util@npm:24.13.1"
@@ -11397,6 +11407,29 @@ __metadata:
   languageName: node
   linkType: hard
 
+"electron-updater-yaml@npm:^1.0.0":
+  version: 1.1.2
+  resolution: "electron-updater-yaml@npm:1.1.2"
+  checksum: 10c0/a6e3a26e9c2305d81eaebc8b13be58a3b566b8f258a831b1acfe8d01fcdf3a9d0a0db9a72321f81670aac407905f36c449315d796a203356581d56595c40d2a2
+  languageName: node
+  linkType: hard
+
+"electron-updater@npm:^6.3.9":
+  version: 6.8.1
+  resolution: "electron-updater@npm:6.8.1"
+  dependencies:
+    builder-util-runtime: "npm:9.5.1"
+    fs-extra: "npm:^10.1.0"
+    js-yaml: "npm:^4.1.0"
+    lazy-val: "npm:^1.0.5"
+    lodash.escaperegexp: "npm:^4.1.2"
+    lodash.isequal: "npm:^4.5.0"
+    semver: "npm:~7.7.3"
+    tiny-typed-emitter: "npm:^2.1.0"
+  checksum: 10c0/7f6f8de7a9f84a465805234a8bbc000fd326a5d9d6b5ca6c55ee23ba4c05271c67d4b08d1829296541d18845f5e6dc07902d89c06317a9871831f28e6d2cbd20
+  languageName: node
+  linkType: hard
+
 "electron-winstaller@npm:^5.3.0":
   version: 5.4.0
   resolution: "electron-winstaller@npm:5.4.0"
@@ -12939,15 +12972,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"github-url-to-object@npm:^4.0.4":
-  version: 4.0.6
-  resolution: "github-url-to-object@npm:4.0.6"
-  dependencies:
-    is-url: "npm:^1.1.0"
-  checksum: 10c0/b8ed9b2b93c55657299b7cc5ce9faf4441f143e59f995e126929d18f8fc692fc932d8530da9bde7655f35b29201beacbc17b066b7e26dbcc0dc983f8d3c918cf
-  languageName: node
-  linkType: hard
-
 "glob-parent@npm:^5.1.2, glob-parent@npm:~5.1.2":
   version: 5.1.2
   resolution: "glob-parent@npm:5.1.2"
@@ -14211,13 +14235,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"is-url@npm:^1.1.0":
-  version: 1.2.4
-  resolution: "is-url@npm:1.2.4"
-  checksum: 10c0/0157a79874f8f95fdd63540e3f38c8583c2ef572661cd0693cda80ae3e42dfe8e9a4a972ec1b827f861d9a9acf75b37f7d58a37f94a8a053259642912c252bc3
-  languageName: node
-  linkType: hard
-
 "is-weakmap@npm:^2.0.2":
   version: 2.0.2
   resolution: "is-weakmap@npm:2.0.2"
@@ -14879,10 +14896,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lodash.escaperegexp@npm:^4.1.2":
+  version: 4.1.2
+  resolution: "lodash.escaperegexp@npm:4.1.2"
+  checksum: 10c0/484ad4067fa9119bb0f7c19a36ab143d0173a081314993fe977bd00cf2a3c6a487ce417a10f6bac598d968364f992153315f0dbe25c9e38e3eb7581dd333e087
+  languageName: node
+  linkType: hard
+
 "lodash.get@npm:^4.0.0":
   version: 4.4.2
   resolution: "lodash.get@npm:4.4.2"
   checksum: 10c0/48f40d471a1654397ed41685495acb31498d5ed696185ac8973daef424a749ca0c7871bf7b665d5c14f5cc479394479e0307e781f61d5573831769593411be6e
+  languageName: node
+  linkType: hard
+
+"lodash.isequal@npm:^4.5.0":
+  version: 4.5.0
+  resolution: "lodash.isequal@npm:4.5.0"
+  checksum: 10c0/dfdb2356db19631a4b445d5f37868a095e2402292d59539a987f134a8778c62a2810c2452d11ae9e6dcac71fc9de40a6fedcb20e2952a15b431ad8b29e50e28f
   languageName: node
   linkType: hard
 
@@ -16161,7 +16192,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ms@npm:2.1.3, ms@npm:^2.0.0, ms@npm:^2.1.1, ms@npm:^2.1.3":
+"ms@npm:2.1.3, ms@npm:^2.0.0, ms@npm:^2.1.3":
   version: 2.1.3
   resolution: "ms@npm:2.1.3"
   checksum: 10c0/d924b57e7312b3b63ad21fc5b3dc0af5e78d61a1fc7cfb5457edaf26326bf62be5307cc87ffb6862ef1c2b33b0233cdb5d4f01c4c958cc0d660948b65a287a48
@@ -19199,7 +19230,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"semver@npm:^7.3.8":
+"semver@npm:^7.3.8, semver@npm:~7.7.3":
   version: 7.7.3
   resolution: "semver@npm:7.7.3"
   bin:
@@ -20331,6 +20362,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"tiny-typed-emitter@npm:^2.1.0":
+  version: 2.1.0
+  resolution: "tiny-typed-emitter@npm:2.1.0"
+  checksum: 10c0/522bed4c579ee7ee16548540cb693a3d098b137496110f5a74bff970b54187e6b7343a359b703e33f77c5b4b90ec6cebc0d0ec3dbdf1bd418723c5c3ce36d8a2
+  languageName: node
+  linkType: hard
+
 "tiny-warning@npm:^1.0.3":
   version: 1.0.3
   resolution: "tiny-warning@npm:1.0.3"
@@ -21064,16 +21102,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"update-electron-app@npm:^3.0.0":
-  version: 3.1.1
-  resolution: "update-electron-app@npm:3.1.1"
-  dependencies:
-    github-url-to-object: "npm:^4.0.4"
-    ms: "npm:^2.1.1"
-  checksum: 10c0/b3c72bd13a02a7227d7116dc939b96a458545371d2dd25a26bf488cefb40d55af4a7c6c81ef025f14fd97f2d9c86256d3e200c7895a5fc4e3ddd3e5594f2ff12
-  languageName: node
-  linkType: hard
-
 "uri-js@npm:^4.2.2":
   version: 4.4.1
   resolution: "uri-js@npm:4.4.1"
@@ -21667,6 +21695,8 @@ __metadata:
     dotenv: "npm:^16.4.5"
     electron: "npm:30.5.1"
     electron-squirrel-startup: "npm:^1.0.1"
+    electron-updater: "npm:^6.3.9"
+    electron-updater-yaml: "npm:^1.0.0"
     fast-glob: "npm:^3.3.3"
     graphql: "npm:^16.12.0"
     graphql-ws: "npm:^6.0.6"
@@ -21680,7 +21710,6 @@ __metadata:
     ts-node: "npm:^10.0.0"
     typescript: "npm:~4.5.4"
     undici: "npm:^6.19.8"
-    update-electron-app: "npm:^3.0.0"
     vite: "npm:^5.0.12"
   languageName: unknown
   linkType: soft

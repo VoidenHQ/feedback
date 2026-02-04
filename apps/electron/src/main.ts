@@ -31,10 +31,13 @@ import "./main/env";
 import "./main/utils";
 import "./main/variables";
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// During Squirrel events (install/update/uninstall), skip all app initialization
+// to avoid "location could not be found" errors from accessing paths that
+// don't exist yet during the install process.
 if (started) {
   app.quit();
-}
+} else {
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -180,5 +183,7 @@ app.on("before-quit", async () => {
 const settings = getSettings();
 const updateChannel = settings.updates?.channel || "stable";
 initializeUpdates(updateChannel);
+
+} // end of !started block
 
 

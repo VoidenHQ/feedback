@@ -1,10 +1,11 @@
-import { app, dialog, ipcMain, autoUpdater, BrowserWindow } from "electron";
-import { updateElectronApp, UpdateSourceType } from "update-electron-app";
+import { app, dialog, ipcMain, BrowserWindow } from "electron";
+import { autoUpdater, type ProgressInfo } from "electron-updater";
 import fs from "node:fs";
 import path from "node:path";
 import * as semver from "semver";
 import * as https from "https";
 import { execFile } from "child_process";
+import { windowManager } from "./windowManager";
 
 // Update state management
 enum UpdateState {
@@ -25,8 +26,8 @@ function setUpdateState(state: UpdateState) {
 
 function isUpdateInProgress(): boolean {
   return currentUpdateState === UpdateState.CHECKING ||
-         currentUpdateState === UpdateState.DOWNLOADING ||
-         currentUpdateState === UpdateState.INSTALLING;
+    currentUpdateState === UpdateState.DOWNLOADING ||
+    currentUpdateState === UpdateState.INSTALLING;
 }
 
 function isUpdateSupported(): boolean {
@@ -36,9 +37,19 @@ function isUpdateSupported(): boolean {
 
 function sendUpdateProgressToWindows(progress: { percent?: number; bytesPerSecond?: number; transferred?: number; total?: number; status: string }) {
   if (!isUpdateSupported()) return;
-  
+
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("update:progress", progress);
+  }
+}
+
+function showToast(type: "info" | "error" | "warning", title: string, description: string, duration: number = 5000) {
+  app.focus();
+  const win = windowManager.browserWindow ?? BrowserWindow.getAllWindows()[0];
+  if (win) {
+    try {
+      win.webContents.send(`toast:${type}`, { title, description, duration });
+    } catch (err) { /* window may be destroyed */ }
   }
 }
 
@@ -64,9 +75,9 @@ function detectLinuxPackageType(): "deb" | "rpm" | "appimage" {
   return "rpm";
 }
 
-function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage") {
+function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage", maxRedirects = 5) {
   if (isUpdateInProgress()) {
-    dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
+    showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
     return;
   }
 
@@ -83,42 +94,73 @@ function downloadAndInstallPackage(url: string, type: "deb" | "rpm" | "appimage"
   setUpdateState(UpdateState.DOWNLOADING);
   sendUpdateProgressToWindows({ status: "downloading", percent: 0 });
 
-  https
-    .get(url, requestOptions, (response) => {
-      if (response.statusCode !== 200) {
-        setUpdateState(UpdateState.ERROR);
-        dialog.showErrorBox("Download Failed", `Failed to download update: ${response.statusCode}`);
-        return;
-      }
+  let redirectCount = 0;
 
-      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
-      let downloadedBytes = 0;
-
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (totalBytes > 0) {
-          const percent = Math.round((downloadedBytes / totalBytes) * 100);
-          sendUpdateProgressToWindows({ 
-            status: "downloading", 
-            percent,
-            transferred: downloadedBytes,
-            total: totalBytes
-          });
+  function doDownload(downloadUrl: string) {
+    https
+      .get(downloadUrl, requestOptions, (response) => {
+        // Handle redirects
+        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          redirectCount++;
+          if (redirectCount > maxRedirects) {
+            setUpdateState(UpdateState.ERROR);
+            showToast("error", "Update Download Failed", "Too many redirects while downloading update.");
+            return;
+          }
+          doDownload(response.headers.location);
+          return;
         }
-      });
 
-      response.pipe(file);
-      file.on("finish", () => {
-        file.close(() => {
-          setUpdateState(UpdateState.INSTALLING);
-          installPackage(tmpPath, type);
+        if (response.statusCode !== 200) {
+          setUpdateState(UpdateState.ERROR);
+          showToast("error", "Update Download Failed", `Failed to download update: ${response.statusCode}`);
+          return;
+        }
+
+        const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+        let lastTime = Date.now();
+        let lastBytes = 0;
+        let bytesPerSecond = 0;
+
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+
+          const now = Date.now();
+          const elapsed = (now - lastTime) / 1000;
+          if (elapsed >= 0.5) {
+            bytesPerSecond = Math.round((downloadedBytes - lastBytes) / elapsed);
+            lastTime = now;
+            lastBytes = downloadedBytes;
+          }
+
+          if (totalBytes > 0) {
+            const percent = Math.round((downloadedBytes / totalBytes) * 100);
+            sendUpdateProgressToWindows({
+              status: "downloading",
+              percent,
+              bytesPerSecond,
+              transferred: downloadedBytes,
+              total: totalBytes
+            });
+          }
         });
+
+        response.pipe(file);
+        file.on("finish", () => {
+          file.close(() => {
+            setUpdateState(UpdateState.INSTALLING);
+            installPackage(tmpPath, type);
+          });
+        });
+      })
+      .on("error", (err) => {
+        setUpdateState(UpdateState.ERROR);
+        showToast("error", "Download Error", err.message);
       });
-    })
-    .on("error", (err) => {
-      setUpdateState(UpdateState.ERROR);
-      dialog.showErrorBox("Download Error", err.message);
-    });
+  }
+
+  doDownload(url);
 }
 
 function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
@@ -127,11 +169,12 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
     fs.chmod(filePath, 0o755, (chmodErr) => {
       if (chmodErr) {
         setUpdateState(UpdateState.ERROR);
-        dialog.showErrorBox("Installation Failed", `Failed to make AppImage executable: ${chmodErr.message}`);
+        showToast("error", "Installation Failed", `Failed to make AppImage executable: ${chmodErr.message}`);
         return;
       }
 
       setUpdateState(UpdateState.READY);
+      app.focus();
       dialog
         .showMessageBox({
           type: "info",
@@ -159,11 +202,12 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
 
     if (error) {
       setUpdateState(UpdateState.ERROR);
-      dialog.showErrorBox("Installation Failed", `${error.message}\n\n${stderr}`);
+      showToast("error", "Installation Failed", `${error.message}\n\n${stderr}`);
       return;
     }
 
     setUpdateState(UpdateState.READY);
+    app.focus();
     dialog
       .showMessageBox({
         type: "info",
@@ -182,7 +226,7 @@ function installPackage(filePath: string, type: "deb" | "rpm" | "appimage") {
 
 function checkForLinuxUpdate(currentVersion: string, channel: "stable" | "early-access" = "stable") {
   if (isUpdateInProgress()) {
-    dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
+    showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
     return;
   }
 
@@ -233,6 +277,7 @@ function checkForLinuxUpdate(currentVersion: string, channel: "stable" | "early-
               return;
             }
 
+            app.focus();
             dialog
               .showMessageBox({
                 type: "info",
@@ -275,18 +320,37 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
     // Choose channel path based on channel preference
     const channelPath = channel === "early-access" ? "beta" : "stable";
 
-    updateElectronApp({
-      updateSource: {
-        type: UpdateSourceType.StaticStorage,
-        baseUrl: `https://voiden.md/api/download/${channelPath}/${platform}/${arch}`,
-      },
-      notifyUser: false, // We handle notifications ourselves
-      updateInterval: "1 hour", // Check for updates every hour
+    // Configure electron-updater
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: `https://voiden.apyverse.dev/api/download/${channelPath}/${platform}/${arch}`,
+    });
+
+    // Check for updates after app is ready, then periodically
+    app.whenReady().then(() => {
+      setTimeout(() => {
+        autoUpdater.checkForUpdates().catch((err: Error) => {
+          console.error("Auto update check failed:", err);
+        });
+      }, 10_000);
+
+      // Check for updates every hour
+      setInterval(() => {
+        if (!isUpdateInProgress()) {
+          autoUpdater.checkForUpdates().catch((err: Error) => {
+            console.error("Periodic update check failed:", err);
+          });
+        }
+      }, 60 * 60 * 1000);
     });
   } else if (platform === "linux") {
     app.whenReady().then(() => {
       setTimeout(() => {
-        checkForLinuxUpdate(currentVersion, channel);
+         if (!isUpdateInProgress()) {
+            checkForLinuxUpdate(currentVersion, channel);
+         }
       }, 10_000);
     });
   }
@@ -296,7 +360,7 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
 export function checkForUpdatesManually(channel: "stable" | "early-access" = "stable"): Promise<{ available: boolean; version?: string }> {
   return new Promise((resolve) => {
     if (isUpdateInProgress()) {
-      dialog.showErrorBox("Update In Progress", "An update is already in progress. Please wait for it to complete.");
+      showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
       resolve({ available: false });
       return;
     }
@@ -326,8 +390,9 @@ export function checkForUpdatesManually(channel: "stable" | "early-access" = "st
               const latest = JSON.parse(data);
               const latestVersion = latest.version;
 
+              setUpdateState(UpdateState.IDLE);
+
               if (semver.valid(latestVersion) && semver.gt(latestVersion, currentVersion)) {
-                // Keep current state (CHECKING) - download will update it
                 resolve({ available: true, version: latestVersion });
               } else {
                 setUpdateState(UpdateState.IDLE);
@@ -382,7 +447,8 @@ export function checkForUpdatesManually(channel: "stable" | "early-access" = "st
                 // Example: A1B2C3D4... Voiden-1.0.0-full.nupkg 12345678
                 const lines = data.split("\n").filter((line) => line.trim());
                 for (const line of lines) {
-                  const match = line.match(/Voiden-(\d+\.\d+\.\d+)-full\.nupkg/i);
+                  // Match stable (voiden-1.1.0-full.nupkg), beta (voiden-1.1.0-beta.20-full.nupkg), and dev (voiden-1.1.0-dev.20-full.nupkg)
+                  const match = line.match(/voiden-(\d+\.\d+\.\d+(?:-(?:beta|dev)\.\d+)?)-full\.nupkg/i);
                   if (match) {
                     latestVersion = match[1];
                     break;
@@ -442,8 +508,20 @@ function setupAutoUpdaterListeners() {
     setUpdateState(UpdateState.IDLE);
   });
 
+  // electron-updater provides detailed progress events
+  autoUpdater.on("download-progress", (progress: ProgressInfo) => {
+    sendUpdateProgressToWindows({
+      status: "downloading",
+      percent: Math.round(progress.percent),
+      bytesPerSecond: progress.bytesPerSecond,
+      transferred: progress.transferred,
+      total: progress.total,
+    });
+  });
+
   autoUpdater.on("update-downloaded", () => {
     setUpdateState(UpdateState.READY);
+    app.focus();
     dialog.showMessageBox({
       type: "info",
       buttons: ["Restart Now", "Later"],
@@ -460,10 +538,17 @@ function setupAutoUpdaterListeners() {
     });
   });
 
-  autoUpdater.on("error", (error) => {
-    console.log(error);
+  autoUpdater.on("error", (error: Error) => {
+    console.error("Update error:", error);
     setUpdateState(UpdateState.ERROR);
-    dialog.showErrorBox("Update Error", `Failed to download update: ${error.message}`);
+
+    const isNetworkError = /ENOTFOUND|ENETUNREACH|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|getaddrinfo/i.test(error.message);
+
+    if (isNetworkError) {
+      showToast("error", "Update Error", "Download failed: No internet connection", Infinity);
+    } else {
+      showToast("error", "Update Error", `Failed to download update: ${error.message}`);
+    }
   });
 }
 
@@ -475,25 +560,13 @@ export function registerUpdateIpcHandlers() {
   ipcMain.handle("app:checkForUpdates", async (_event, channel: "stable" | "early-access") => {
     // Don't check for updates in development mode
     if (!isUpdateSupported()) {
-      dialog.showMessageBox({
-        type: "info",
-        buttons: ["OK"],
-        title: "Updates Not Available",
-        message: "Updates are only available in production builds.",
-        detail: "You are currently running a development build. Updates can only be checked in packaged/installed versions of the app.",
-      });
+      showToast("info", "Updates Not Available", "Updates are only available in production builds. You are currently running a development build.");
       return { available: false };
     }
 
     // Check if update is already in progress
     if (isUpdateInProgress()) {
-      dialog.showMessageBox({
-        type: "warning",
-        buttons: ["OK"],
-        title: "Update In Progress",
-        message: "An update is already in progress.",
-        detail: "Please wait for the current update to complete before checking for updates again.",
-      });
+      showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
       return { available: false, inProgress: true };
     }
 
@@ -541,10 +614,11 @@ export function registerUpdateIpcHandlers() {
               // Check if the required package format is available
               if (!downloadUrl) {
                 console.error(`Update not available for package type: ${packageType}`);
-                dialog.showErrorBox("Update Error", `Update not available for ${packageTypeLabel} format.`);
+                showToast("warning", "Update Error", `Update not available for ${packageTypeLabel} format.`);
                 return;
               }
 
+              app.focus();
               dialog
                 .showMessageBox({
                   type: "info",
@@ -569,6 +643,7 @@ export function registerUpdateIpcHandlers() {
         });
       } else {
         // For Windows/macOS, manually trigger the update download
+        app.focus();
         dialog.showMessageBox({
           type: "info",
           buttons: ["Download & Install", "Later"],
@@ -577,15 +652,21 @@ export function registerUpdateIpcHandlers() {
           title: "Update Available",
           message: `A new version (${result.version})${channelLabel} is available!`,
           detail: `You are currently running version ${app.getVersion()}.\n\nClick "Download & Install" to update now.`,
-        }).then((response) => {
+        }).then(async (response) => {
           if (response.response === 0) {
             try {
               setUpdateState(UpdateState.DOWNLOADING);
-              autoUpdater.checkForUpdates();
+              sendUpdateProgressToWindows({ status: "downloading", percent: 0 });
+              // Use electron-updater to check and download the update
+              const updateCheckResult = await autoUpdater.checkForUpdates();
+              if (updateCheckResult) {
+                // Download the update - progress will be reported via download-progress event
+                await autoUpdater.downloadUpdate();
+              }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               setUpdateState(UpdateState.ERROR);
-              dialog.showErrorBox("Update Error", `Failed to initialize updater: ${errorMessage}`);
+              showToast("error", "Update Error", `Failed to download update: ${errorMessage}`);
             }
           }
         });
@@ -593,13 +674,7 @@ export function registerUpdateIpcHandlers() {
 
       return { available: true, version: result.version };
     } else {
-      dialog.showMessageBox({
-        type: "info",
-        buttons: ["OK"],
-        title: "No Updates Available",
-        message: "You're running the latest version!",
-        detail: `Current version: ${app.getVersion()}`,
-      });
+      showToast("info", "No Updates Available", `You're running the latest version! (${app.getVersion()})`);
       return { available: false };
     }
   });
