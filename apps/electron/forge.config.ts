@@ -154,7 +154,7 @@ const config: ForgeConfig = {
       const resourcesPath = path.resolve(buildPath, "..");
       const yml = await getAppUpdateYml({
         name: "Voiden",
-        url: `https://voiden.apyverse.dev/api/download/${releaseChannel}/${platform}/${arch}`,
+        url: `https://voiden.md/api/download/${releaseChannel}/${platform}/${arch}`,
         updaterCacheDirName: "voiden-updater",
       });
 
