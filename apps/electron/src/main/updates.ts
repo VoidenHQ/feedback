@@ -325,7 +325,7 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.setFeedURL({
       provider: "generic",
-      url: `https://voiden.apyverse.dev/api/download/${channelPath}/${platform}/${arch}`,
+      url: `https://voiden.md/api/download/${channelPath}/${platform}/${arch}`,
     });
 
     // Check for updates after app is ready, then periodically
