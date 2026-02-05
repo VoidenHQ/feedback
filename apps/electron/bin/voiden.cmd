@@ -7,9 +7,9 @@ REM Copyright (c) ApyHub
 REM ============================================
 
 REM ============================================
-REM VERSION - UPDATE THIS MANUALLY FOR RELEASES
+REM VERSION - Replaced at build time by forge.config.ts
 REM ============================================
-set "VOIDEN_VERSION=1.0.1"
+set "VOIDEN_VERSION=1.1.0"
 
 REM ============================================
 REM Functions (using CALL with labels)
@@ -173,7 +173,9 @@ REM ============================================
 set "VOIDEN_PATH="
 
 REM Check common installation paths
-if exist "%LOCALAPPDATA%\Programs\Voiden\Voiden.exe" (
+if exist "%LOCALAPPDATA%\local\voiden\Voiden.exe" (
+    set "VOIDEN_PATH=%LOCALAPPDATA%\local\voiden\Voiden.exe"
+) else if exist "%LOCALAPPDATA%\Programs\Voiden\Voiden.exe" (
     set "VOIDEN_PATH=%LOCALAPPDATA%\Programs\Voiden\Voiden.exe"
 ) else if exist "%ProgramFiles%\Voiden\Voiden.exe" (
     set "VOIDEN_PATH=%ProgramFiles%\Voiden\Voiden.exe"
