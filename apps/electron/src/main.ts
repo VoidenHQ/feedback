@@ -39,16 +39,21 @@ if (started) {
   app.quit();
 } else {
 
-const gotTheLock = app.requestSingleInstanceLock();
+const gotTheLock = app.requestSingleInstanceLock({ args: getCliArguments() });
 
 if (!gotTheLock) {
   app.quit();
 }
 
 
-app.on('second-instance', async (event, commandLine, workingDirectory) => {
+app.on('second-instance', async (event, commandLine, workingDirectory, additionalData) => {
   try {
-    const args = (commandLine).slice(3);
+    // On Linux, commandLine has fewer Chromium flags so slice(3) loses user args.
+    // Use additionalData to get pre-parsed CLI arguments reliably on Linux.
+    const args: string[] = process.platform === 'linux'
+      ? (additionalData as { args?: string[] })?.args || []
+      : (commandLine).slice(3);
+
     if (args.length > 0) {
       await handleCliArguments(args);
     } else {
@@ -57,17 +62,8 @@ app.on('second-instance', async (event, commandLine, workingDirectory) => {
         await windowManager.loadAllWindows()
         return;
       }
-      try {
-        const mainWindow = windows.values().next().value as BrowserWindow;
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        if (!mainWindow.isVisible()) mainWindow.show();
-        mainWindow.focus();
-        // macOS: activate app
-        if (process.platform === 'darwin') {
-          app.focus({ steal: true });
-        }
-      } catch (error) {
-      }
+      // No args: create a new window
+      await windowManager.createWindow(undefined, true);
     }
   } catch (error) {
   }
