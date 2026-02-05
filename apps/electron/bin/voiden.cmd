@@ -173,8 +173,8 @@ REM ============================================
 set "VOIDEN_PATH="
 
 REM Check common installation paths
-if exist "%LOCALAPPDATA%\local\voiden\Voiden.exe" (
-    set "VOIDEN_PATH=%LOCALAPPDATA%\local\voiden\Voiden.exe"
+if exist "%LOCALAPPDATA%\voiden\Voiden.exe" (
+    set "VOIDEN_PATH=%LOCALAPPDATA%\voiden\Voiden.exe"
 ) else if exist "%LOCALAPPDATA%\Programs\Voiden\Voiden.exe" (
     set "VOIDEN_PATH=%LOCALAPPDATA%\Programs\Voiden\Voiden.exe"
 ) else if exist "%ProgramFiles%\Voiden\Voiden.exe" (

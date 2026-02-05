@@ -11,10 +11,11 @@ export async function handleCliArguments(
   args: string[]
 ) {
 
-  // Filter out Electron/Chromium arguments
+  // Filter out Electron/Chromium/Squirrel arguments
   const userArgs = args.filter(arg =>
     !arg.includes('electron') &&
     !arg.endsWith('.js') &&
+    !arg.startsWith('--squirrel-') &&
     arg !== ''
   );
 
