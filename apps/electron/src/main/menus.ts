@@ -167,7 +167,8 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
       ]);
     }
 
-    menu.popup({ window: windowManager.browserWindow||undefined });
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: senderWindow || undefined });
   });
 
   ipcMain.on("show-bulk-delete-menu", async (event, data: FileTreeItem[]) => {
@@ -201,6 +202,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
     ];
 
     const menu = Menu.buildFromTemplate(template);
-    menu.popup({ window: mainWindow });
+    const bulkSenderWindow = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: bulkSenderWindow || undefined });
   });
 };

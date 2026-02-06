@@ -146,6 +146,26 @@ if (isMac) {
 
 const config: ForgeConfig = {
   hooks: {
+    // Stamp version from package.json into bin scripts before packaging
+    generateAssets: async () => {
+      const binDir = path.join(__dirname, "bin");
+
+      // Replace VOIDEN_VERSION="<any value>" with the current version in bash script
+      const bashFile = path.join(binDir, "voiden");
+      if (fs.existsSync(bashFile)) {
+        const content = fs.readFileSync(bashFile, "utf-8");
+        fs.writeFileSync(bashFile, content.replace(/VOIDEN_VERSION="[^"]*"/, `VOIDEN_VERSION="${version}"`));
+        console.log(`Stamped version ${version} into voiden`);
+      }
+
+      // Replace set "VOIDEN_VERSION=<any value>" with the current version in cmd script
+      const cmdFile = path.join(binDir, "voiden.cmd");
+      if (fs.existsSync(cmdFile)) {
+        const content = fs.readFileSync(cmdFile, "utf-8");
+        fs.writeFileSync(cmdFile, content.replace(/set "VOIDEN_VERSION=[^"]*"/, `set "VOIDEN_VERSION=${version}"`));
+        console.log(`Stamped version ${version} into voiden.cmd`);
+      }
+    },
     // Generate app-update.yml in the packaged app's resources directory
     // This tells electron-updater where to check for updates (without needing electron-builder)
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {

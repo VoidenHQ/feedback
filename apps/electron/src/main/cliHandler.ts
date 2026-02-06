@@ -11,10 +11,11 @@ export async function handleCliArguments(
   args: string[]
 ) {
 
-  // Filter out Electron/Chromium arguments
+  // Filter out Electron/Chromium/Squirrel arguments
   const userArgs = args.filter(arg =>
     !arg.includes('electron') &&
     !arg.endsWith('.js') &&
+    !arg.startsWith('--squirrel-') &&
     arg !== ''
   );
 
@@ -85,7 +86,6 @@ async function openPath(inputPath: string): Promise<void> {
           "The selected location could not be found. Please check the path and try again.",
         buttons: ["OK"]
       });
-
     }
     return;
   }
@@ -150,16 +150,26 @@ async function openPath(inputPath: string): Promise<void> {
  * Get CLI arguments, handling different execution contexts
  */
 export function getCliArguments(): string[] {
+  let args: string[];
+
   // In development mode or when launched directly
   if (process.defaultApp || !app.isPackaged) {
     // Skip electron executable and main script
-    return process.argv.slice(2);
+    args = process.argv.slice(2);
+  } else {
+    // In production (packaged app)
+    // On macOS/Linux: ['app-path', 'file.void']
+    // On Windows: ['app-path', 'file.void']
+    args = process.argv.slice(1);
   }
 
-  // In production (packaged app)
-  // On macOS/Linux: ['app-path', 'file.void']
-  // On Windows: ['app-path', 'file.void']
-  return process.argv.slice(1);
+  // If launched by Squirrel (e.g. --squirrel-firstrun after install),
+  // return no arguments so the app opens with its default state
+  if (args.some(arg => arg.startsWith('--squirrel-'))) {
+    return [];
+  }
+
+  return args;
 }
 
 /**

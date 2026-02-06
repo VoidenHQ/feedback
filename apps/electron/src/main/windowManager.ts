@@ -184,10 +184,6 @@ class WindowManager {
 
       win.webContents.on("did-finish-load", async () => {
         await initializeWelcomeTabs();
-        const cliArgs = getCliArguments();
-        if (cliArgs.length > 0) {
-          await handleCliArguments(win, cliArgs);
-        }
       });
 
       setupMacOSFileHandler(win);
