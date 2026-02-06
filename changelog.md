@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.1 — 06/02/2026
+
+Bug fix release addressing multi-window state management, CLI improvements for Windows and Linux, and update flow enhancements.
+
+### Fixed
+- Fixed multi-window instance pile-up where closing a window did not properly clean up its state, causing accumulated orphan states
+- Fixed CLI to display the correct version information
+- Fixed `voiden` command not working on Windows and Linux to open projects or files
+- Fixed right-click context menu not appearing on Linux Fedora
+- Fixed code block content not wrapping properly in the Markdown preview plugin
+
+### Changed
+- Improved update flow logic with error messages displayed as toast notifications in the bottom right
+- Added download progress indicator in the UI during updates
+- Smooth transition animations when switching between update channels
+
+---
+
 ## v1.1.0 — 23/01/2026
 
 Major release introducing multi-window support, GraphQL protocol support, CLI automation, and significant performance improvements for large OpenAPI specifications.

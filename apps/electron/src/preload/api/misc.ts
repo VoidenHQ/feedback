@@ -182,5 +182,6 @@ export const mainWindow = {
   minimize: () => ipcRenderer.invoke("mainwindow:minimize"),
   maximize: () => ipcRenderer.invoke("mainwindow:maximize"),
   close: () => ipcRenderer.invoke("mainwindow:close"),
+  closeAndDeleteState: () => ipcRenderer.invoke("mainwindow:closeAndDeleteState"),
   isMaximized:()=>ipcRenderer.invoke("mainwindow:isMaximized")
 }

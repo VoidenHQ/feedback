@@ -2,7 +2,7 @@
   "id": "md-preview",
   "name": "Markdown Preview",
   "description": "Live preview and rendering for Markdown files with full GitHub Flavored Markdown (GFM) support including tables, syntax highlighting, task lists, and strikethrough formatting",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Voiden Team",
   "enabled": true,
   "priority": 40,

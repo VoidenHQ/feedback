@@ -1,39 +1,24 @@
 import { BrowserWindow, app } from "electron";
 import os from "node:os";
 import { createWindow } from "./window";
-import { handleCliArguments } from "./cliHandler";
 
 function handleWindowsDeeplink(mainWindow: BrowserWindow) {
-  const gotTheLock = app.requestSingleInstanceLock();
-
-  if (!gotTheLock) {
-    app.quit();
-  } else {
-    app.on("second-instance", async (event, commandLine) => {
-      if (mainWindow) {
+  // Only handle voiden:// deep link URLs on Windows.
+  // CLI argument handling (files/folders) is done in main.ts's second-instance handler.
+  // Do NOT call requestSingleInstanceLock here — it's already called in main.ts.
+  app.on("second-instance", async (_event, commandLine) => {
+    const lastArg = commandLine[commandLine.length - 1];
+    if (lastArg && lastArg.startsWith("voiden://")) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
-      }
-      event.preventDefault();
-
-      // Check if this is a deep link URL (for login)
-      const lastArg = commandLine[commandLine.length - 1];
-      if (lastArg && lastArg.startsWith("voiden://")) {
         if (lastArg.includes("isRefresh=")) {
           mainWindow.reload();
         }
         mainWindow.webContents.send("handle-login", lastArg);
-        return;
       }
-
-      // Otherwise, handle as CLI arguments (files/folders to open)
-      // Skip the executable path (first argument)
-      const cliArgs = commandLine.slice(1);
-      if (cliArgs.length > 0) {
-        await handleCliArguments(mainWindow, cliArgs);
-      }
-    });
-  }
+    }
+  });
 }
 
 function handleMacDeeplink(mainWindow: BrowserWindow) {

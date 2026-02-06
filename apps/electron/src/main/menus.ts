@@ -11,12 +11,18 @@ import { saveState } from "./persistState";
 import eventBus from "./eventBus";
 import { FileTreeItem } from "src/types";
 import fs from "node:fs";
-import { windowManager } from "./windowManager";
+
+let contextMenuHandlersRegistered = false;
 
 export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
+  // Prevent registering handlers multiple times (called for each window)
+  if (contextMenuHandlersRegistered) return;
+  contextMenuHandlersRegistered = true;
+
   ipcMain.on("show-file-context-menu", (event, data) => {
     let menu;
     const appState = getAppState(event);
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
     // Check if this is the root folder of the current project
     const isRootFolder =
       appState.activeDirectory === data.path || Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path);
@@ -26,7 +32,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
         {
           label: "New Voiden file...",
           click: async () => {
-            windowManager.browserWindow?.webContents.send("file:create-void", {
+            senderWindow?.webContents.send("file:create-void", {
               path: data.path,
             });
           },
@@ -35,7 +41,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
           label: "New file...",
           click: async () => {
             // console.debug("new -regular file");
-            windowManager.browserWindow?.webContents.send("file:create", {
+            senderWindow?.webContents.send("file:create", {
               path: data.path,
             });
           },
@@ -43,7 +49,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
         {
           label: "New folder...",
           click: async () => {
-            windowManager.browserWindow?.webContents.send("directory:create", {
+            senderWindow?.webContents.send("directory:create", {
               path: data.path,
             });
           },
@@ -59,7 +65,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
         {
           label: "Close Project",
           click: async () => {
-            windowManager.browserWindow?.webContents.send("directory:close-project", {});
+            senderWindow?.webContents.send("directory:close-project", {});
           },
         },
         { type: "separator" as const },
@@ -70,7 +76,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
         menuTemplate.push({
           label: "Rename",
           click: () => {
-            windowManager.browserWindow?.webContents.send("file:rename", {
+            senderWindow?.webContents.send("file:rename", {
               path: data.path,
             });
           },
@@ -80,7 +86,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
           accelerator: process.platform === "darwin" ? "Cmd+Backspace" : "Delete",
           click: async () => {
             const res = await deleteDirectory(data.path);
-            windowManager.browserWindow?.webContents.send("directory:delete", data);
+            senderWindow?.webContents.send("directory:delete", data);
           },
         });
       }
@@ -99,7 +105,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
         {
           label: "Rename",
           click: () => {
-            windowManager.browserWindow?.webContents.send("file:rename", {
+            senderWindow?.webContents.send("file:rename", {
               path: data.path,
             });
           },
@@ -141,7 +147,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
             }
 
             // Notify that the file was deleted.
-            windowManager.browserWindow?.webContents.send("file:delete", data);
+            senderWindow?.webContents.send("file:delete", data);
           },
         },
         {
@@ -155,7 +161,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
 
             try {
               const result = await duplicateFile(originalPath, newName);
-              windowManager.browserWindow?.webContents.send("file:duplicate", {
+              senderWindow?.webContents.send("file:duplicate", {
                 path: result.path,
                 name: result.name,
               });
@@ -167,10 +173,11 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
       ]);
     }
 
-    menu.popup({ window: windowManager.browserWindow||undefined });
+    menu.popup({ window: senderWindow || undefined });
   });
 
   ipcMain.on("show-bulk-delete-menu", async (event, data: FileTreeItem[]) => {
+    const bulkSenderWindow = BrowserWindow.fromWebContents(event.sender);
     const template = [
       {
         label: `Delete ${data.length} items`,
@@ -189,10 +196,10 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
             for (const item of data) {
               if (item.type === "folder") {
                  await fs.promises.rm(item.path,{recursive:true,force:true});
-                windowManager.browserWindow?.webContents.send("directory:delete", item);
+                bulkSenderWindow?.webContents.send("directory:delete", item);
               } else {
                 await shell.trashItem(item.path);
-                windowManager.browserWindow?.webContents.send("file:delete", item);
+                bulkSenderWindow?.webContents.send("file:delete", item);
               }
             }
           }
@@ -201,6 +208,6 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
     ];
 
     const menu = Menu.buildFromTemplate(template);
-    menu.popup({ window: mainWindow });
+    menu.popup({ window: bulkSenderWindow || undefined });
   });
 };

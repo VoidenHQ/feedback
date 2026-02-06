@@ -2,6 +2,78 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useState, useEffect } from 'react';
 
+const Pre = ({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) => (
+  <pre
+    {...props}
+    style={{
+      maxWidth: '100%',
+      whiteSpace: 'pre-wrap',
+      wordWrap: 'break-word',
+      overflowX: 'hidden',
+      ...(props.style || {}),
+    }}
+  >
+    {children}
+  </pre>
+);
+
+const Code = ({
+  inline,
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => (
+  <code
+    {...props}
+    className={className}
+    style={{
+      display: inline ? undefined : 'block',
+      maxWidth: '100%',
+      whiteSpace: inline ? undefined : 'pre-wrap',
+      wordBreak: 'break-word',
+      ...(props.style || {}),
+    }}
+  >
+    {children}
+  </code>
+);
+
+const Paragraph = ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
+  <p
+    {...props}
+    style={{
+      maxWidth: '100%',
+      wordBreak: 'break-word',
+      overflowWrap: 'break-word',
+      margin: '0.5rem 0',
+      padding: '0.25rem 0',
+      ...(props.style || {}),
+    }}
+  >
+    {children}
+  </p>
+);
+
+const Blockquote = ({ children, ...props }: React.BlockquoteHTMLAttributes<HTMLQuoteElement>) => (
+  <blockquote
+    {...props}
+    style={{
+      borderLeft: '4px solid var(--blockquote-border, #555)',
+      backgroundColor: 'var(--blockquote-bg, transparent)',
+      color: 'var(--blockquote-fg, inherit)',
+      padding: '10px 10px',
+      marginLeft: '10px',
+      marginRight: '10px',
+      marginTop: '0.5rem',
+      marginBottom: '0.5rem',
+      borderRadius: '4px',
+      ...(props.style || {}),
+    }}
+  >
+    {children}
+  </blockquote>
+);
+
 // Simple link handler for external links
 const CustomLink = ({ href, children }: { href?: string; children: React.ReactNode }) => {
   const handleClick = () => {
@@ -77,6 +149,12 @@ export const MarkdownPreviewPanel = () => {
             components={{
               // Override the default anchor tag rendering
               a: ({ href, children }) => <CustomLink href={href}>{children}</CustomLink>,
+              pre: ({ children, ...props }) => <Pre {...props}>{children}</Pre>,
+              code: ({ className, children, ...props }: any) => (
+                <Code inline={!className} className={className} {...props}>{children}</Code>
+              ),
+              p: ({ children, ...props }) => <Paragraph {...props}>{children}</Paragraph>,
+              blockquote: ({ children, ...props }) => <Blockquote {...props}>{children}</Blockquote>,
             }}
             className={MarkdownPreviewPanel.proseClasses || ""}
           >

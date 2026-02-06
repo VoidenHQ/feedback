@@ -157,7 +157,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             <RouterProvider router={router} />
             {/* <ReactQueryDevtools /> */}
           </QueryClientProvider>
-          <Toaster position="bottom-center" />
+          <Toaster position="bottom-right" />
         </AppErrorBoundary>
       </React.StrictMode>,
     );
