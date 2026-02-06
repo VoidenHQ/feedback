@@ -102,7 +102,7 @@ export const HamburgerMenu = ({ onShowAbout }: HamburgerMenuProps) => {
   };
 
   const handleCloseWindow = async () => {
-    await window.electron?.mainwindow.close();
+    await window.electron?.mainwindow.closeAndDeleteState();
     setIsOpen(false);
   };
 
