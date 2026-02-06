@@ -19,10 +19,14 @@ let appSettings: AppSettings;
 let extensionManager: ExtensionManager;
 
 export const updateWindowState = ()=>{
-  appState=windowManager.getWindowState();
+  try {
+    appState=windowManager.getWindowState();
+  } catch (e) {
+    // Window state may not be available yet during initialization
+  }
 }
 // Initialize state and settings on startup.
-export const initializeState = async (skipDefault?:boolean) => {
+export const initializeState = async (skipDefault?:boolean): Promise<AppState> => {
   appState = await loadState(skipDefault);
 
   appSettings = await loadSettings();
@@ -67,21 +71,22 @@ export const initializeState = async (skipDefault?:boolean) => {
 
   // Clean up autosaved files that are no longer referenced
   await cleanupAutosaveFiles(activeTabIds);
+
+  return appState;
 };
 
 
 // Update getAppState to return the loaded state.
 export const getAppState = (event?:IpcMainInvokeEvent): AppState => {
-  let wind;
   let windowId = windowManager.activeWindowId;
   if(event && event.sender){
-    wind = BrowserWindow.fromWebContents(event.sender)
-    windowId = wind?.windowInfo.id || windowManager.activeWindowId;
+    const wind = BrowserWindow.fromWebContents(event.sender);
+    windowId = wind?.windowInfo?.id || windowManager.activeWindowId;
   }
-  if (!windowManager.getActiveWindowId) {
+  if (!windowManager.getActiveWindowId()) {
     throw new Error("App state not yet initialized");
   }
-  return windowManager.get(windowId as string);
+  return windowManager.getWindowState(windowId as string);
 };
 
 function getPanelTabs(layout: PanelElement, panelId: string): Tab[] | null {

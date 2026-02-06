@@ -161,9 +161,9 @@ const menubarTemplate: Array<MenuItemConstructorOptions> = [
       },
       {
         label: "Close Window",
-        click: async () => {
-          await windowManager.destroyWindow(windowManager.activeWindowId as string);
-          if (windowManager.browserWindow) await windowManager.browserWindow?.close();
+        click: () => {
+          // Delete state before closing since this is explicit menu close
+          windowManager.closeWindowAndDeleteState();
         },
       },
       // Windows-specific menu items

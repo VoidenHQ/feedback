@@ -117,7 +117,6 @@ export async function deleteFile(filePath: string) {
   // If user confirms (clicks Delete)
   if (response === 1) {
     // Unwatch the path first to release file handles on Windows
-    unwatchPath(filePath);
     await shell.trashItem(filePath);
     return true;
   }

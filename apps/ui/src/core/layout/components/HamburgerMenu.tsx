@@ -21,6 +21,7 @@ import {
   FileText,
   View,
   ScrollText,
+  AppWindow,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useGetPanelTabs, useAddPanelTab, useActivateTab } from "@/core/layout/hooks";
@@ -97,6 +98,11 @@ export const HamburgerMenu = ({ onShowAbout }: HamburgerMenuProps) => {
 
   const handleCloseProject = async () => {
     await window.electron?.menuCloseProject();
+    setIsOpen(false);
+  };
+
+  const handleCloseWindow = async () => {
+    await window.electron?.mainwindow.closeAndDeleteState();
     setIsOpen(false);
   };
 
@@ -200,6 +206,7 @@ export const HamburgerMenu = ({ onShowAbout }: HamburgerMenuProps) => {
         { label: "Save", accelerator: "Ctrl+S", click: handleSave, icon: Save },
         { type: "separator" },
         { label: "Close Project", click: handleCloseProject, icon: X },
+        { label: "Close Window", click: handleCloseWindow, icon: AppWindow },
         { type: "separator" },
         { label: "Settings...", accelerator: "Ctrl+,", click: handleOpenSettings, icon: SettingsIcon },
         { type: "separator" },

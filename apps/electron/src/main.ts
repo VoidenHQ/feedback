@@ -31,21 +31,39 @@ import "./main/env";
 import "./main/utils";
 import "./main/variables";
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// During Squirrel events (install/update/uninstall), skip all app initialization
+// to avoid "location could not be found" errors from accessing paths that
+// don't exist yet during the install process.
 if (started) {
   app.quit();
-}
+} else {
 
-const gotTheLock = app.requestSingleInstanceLock();
+const gotTheLock = app.requestSingleInstanceLock({ args: getCliArguments() });
 
 if (!gotTheLock) {
   app.quit();
 }
 
 
-app.on('second-instance', async (event, commandLine, workingDirectory) => {
+app.on('second-instance', async (event, commandLine, workingDirectory, additionalData) => {
   try {
-    const args = (commandLine).slice(3);
+    // Extract CLI arguments per platform.
+    let args: string[] = [];
+
+    if (process.platform === 'linux') {
+      // On Linux, commandLine has fewer Chromium flags so slice(N) loses user args.
+      // Use additionalData which contains pre-parsed CLI arguments.
+      args = (additionalData as { args?: string[] })?.args || [];
+    } else if (process.platform === 'win32') {
+      // On Windows, the number of Chromium flags in commandLine varies,
+      // so use additionalData (passed via requestSingleInstanceLock) instead.
+      args = (additionalData as { args?: string[] })?.args || [];
+    } else {
+      // macOS - commandLine reliably has 3 prefix entries (executable + 2 Chromium flags)
+      args = commandLine.slice(3);
+    }
+
     if (args.length > 0) {
       await handleCliArguments(args);
     } else {
@@ -54,17 +72,8 @@ app.on('second-instance', async (event, commandLine, workingDirectory) => {
         await windowManager.loadAllWindows()
         return;
       }
-      try {
-        const mainWindow = windows.values().next().value as BrowserWindow;
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        if (!mainWindow.isVisible()) mainWindow.show();
-        mainWindow.focus();
-        // macOS: activate app
-        if (process.platform === 'darwin') {
-          app.focus({ steal: true });
-        }
-      } catch (error) {
-      }
+      // No args: create a new window
+      await windowManager.createWindow(undefined, true);
     }
   } catch (error) {
   }
@@ -134,9 +143,17 @@ app.on("ready", async () => {
     return windowManager.browserWindow.isMaximized()
   })
 
-  ipcMain.handle('mainwindow:close', () => {
-    if (!windowManager.browserWindow) return;
-    windowManager.browserWindow.close();
+  ipcMain.handle('mainwindow:close', (event) => {
+    // Just close the window, preserve state for session restore
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.close();
+    }
+  })
+
+  ipcMain.handle('mainwindow:closeAndDeleteState', (event) => {
+    // Close window and delete its state (explicit "Close Window" from menu)
+    windowManager.closeWindowFromSender(event.sender);
   })
   // Register all IPC handlers
   registerSettingsIpc();
@@ -180,5 +197,7 @@ app.on("before-quit", async () => {
 const settings = getSettings();
 const updateChannel = settings.updates?.channel || "stable";
 initializeUpdates(updateChannel);
+
+} // end of !started block
 
 
