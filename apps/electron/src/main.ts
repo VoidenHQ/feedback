@@ -143,9 +143,8 @@ app.on("ready", async () => {
     return windowManager.browserWindow.isMaximized()
   })
 
-  ipcMain.handle('mainwindow:close', () => {
-    if (!windowManager.browserWindow) return;
-    windowManager.browserWindow.close();
+  ipcMain.handle('mainwindow:close', (event) => {
+    windowManager.closeWindowFromSender(event.sender);
   })
   // Register all IPC handlers
   registerSettingsIpc();
