@@ -144,6 +144,15 @@ app.on("ready", async () => {
   })
 
   ipcMain.handle('mainwindow:close', (event) => {
+    // Just close the window, preserve state for session restore
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.close();
+    }
+  })
+
+  ipcMain.handle('mainwindow:closeAndDeleteState', (event) => {
+    // Close window and delete its state (explicit "Close Window" from menu)
     windowManager.closeWindowFromSender(event.sender);
   })
   // Register all IPC handlers
