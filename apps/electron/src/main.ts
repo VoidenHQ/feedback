@@ -48,11 +48,21 @@ if (!gotTheLock) {
 
 app.on('second-instance', async (event, commandLine, workingDirectory, additionalData) => {
   try {
-    // On Linux, commandLine has fewer Chromium flags so slice(3) loses user args.
-    // Use additionalData to get pre-parsed CLI arguments reliably on Linux.
-    const args: string[] = process.platform === 'linux'
-      ? (additionalData as { args?: string[] })?.args || []
-      : (commandLine).slice(3);
+    // Extract CLI arguments per platform.
+    let args: string[] = [];
+
+    if (process.platform === 'linux') {
+      // On Linux, commandLine has fewer Chromium flags so slice(N) loses user args.
+      // Use additionalData which contains pre-parsed CLI arguments.
+      args = (additionalData as { args?: string[] })?.args || [];
+    } else if (process.platform === 'win32') {
+      // On Windows, the number of Chromium flags in commandLine varies,
+      // so use additionalData (passed via requestSingleInstanceLock) instead.
+      args = (additionalData as { args?: string[] })?.args || [];
+    } else {
+      // macOS - commandLine reliably has 3 prefix entries (executable + 2 Chromium flags)
+      args = commandLine.slice(3);
+    }
 
     if (args.length > 0) {
       await handleCliArguments(args);

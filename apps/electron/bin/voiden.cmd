@@ -201,7 +201,7 @@ for %%a in (%*) do (
         set "HAS_ARGS=1"
         REM Resolve the path
         call :resolve_path "!arg!"
-        set "RESOLVED_ARGS=!RESOLVED_ARGS! "!RESOLVED_PATH!"
+        set "RESOLVED_ARGS=!RESOLVED_ARGS! "!RESOLVED_PATH!""
     )
 )
 
