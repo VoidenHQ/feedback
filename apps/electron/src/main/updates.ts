@@ -313,7 +313,7 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
   const arch = process.arch;
   const currentVersion = app.getVersion();
 
-  if (platform === "win32" || platform === "darwin") {
+  if (platform === "darwin") {
     // Setup autoUpdater event listeners for progress tracking
     setupAutoUpdaterListeners();
 
@@ -345,6 +345,31 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
         }
       }, 60 * 60 * 1000);
     });
+  } else if (platform === "win32") {
+    // Windows: electron-updater conflicts with Squirrel packaging, so use
+    // custom HTTP check (same as manual) and only use autoUpdater for downloading
+    setupAutoUpdaterListeners();
+
+    const channelPath = channel === "early-access" ? "beta" : "stable";
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: `https://voiden.md/api/download/${channelPath}/${platform}/${arch}`,
+    });
+
+    app.whenReady().then(() => {
+      setTimeout(() => {
+        windowsAutoUpdateCheck(channel);
+      }, 10_000);
+
+      setInterval(() => {
+        if (!isUpdateInProgress()) {
+          windowsAutoUpdateCheck(channel);
+        }
+      }, 60 * 60 * 1000);
+    });
   } else if (platform === "linux") {
     app.whenReady().then(() => {
       setTimeout(() => {
@@ -353,6 +378,45 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
          }
       }, 10_000);
     });
+  }
+}
+
+// Windows auto-update: uses safe custom HTTP check to avoid Squirrel/electron-updater conflict
+async function windowsAutoUpdateCheck(channel: "stable" | "early-access") {
+  if (!isUpdateSupported() || isUpdateInProgress()) return;
+
+  try {
+    const result = await checkForUpdatesManually(channel);
+    if (!result.available) return;
+
+    const channelLabel = channel === "early-access" ? " (Early Access)" : "";
+    app.focus();
+    const response = await dialog.showMessageBox({
+      type: "info",
+      buttons: ["Download & Install", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Available",
+      message: `A new version (${result.version})${channelLabel} is available!`,
+      detail: `You are currently running version ${app.getVersion()}.\n\nClick "Download & Install" to update now.`,
+    });
+
+    if (response.response === 0) {
+      try {
+        setUpdateState(UpdateState.DOWNLOADING);
+        sendUpdateProgressToWindows({ status: "downloading", percent: 0 });
+        const updateCheckResult = await autoUpdater.checkForUpdates();
+        if (updateCheckResult) {
+          await autoUpdater.downloadUpdate();
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        setUpdateState(UpdateState.ERROR);
+        showToast("error", "Update Error", `Failed to download update: ${errorMessage}`);
+      }
+    }
+  } catch (error) {
+    console.error("Windows auto update check failed:", error);
   }
 }
 
