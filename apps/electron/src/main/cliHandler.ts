@@ -11,11 +11,10 @@ export async function handleCliArguments(
   args: string[]
 ) {
 
-  // Filter out Electron/Chromium/Squirrel arguments
+  // Filter out Electron/Chromium arguments
   const userArgs = args.filter(arg =>
     !arg.includes('electron') &&
     !arg.endsWith('.js') &&
-    !arg.startsWith('--squirrel-') &&
     arg !== ''
   );
 
@@ -161,12 +160,6 @@ export function getCliArguments(): string[] {
     // On macOS/Linux: ['app-path', 'file.void']
     // On Windows: ['app-path', 'file.void']
     args = process.argv.slice(1);
-  }
-
-  // If launched by Squirrel (e.g. --squirrel-firstrun after install),
-  // return no arguments so the app opens with its default state
-  if (args.some(arg => arg.startsWith('--squirrel-'))) {
-    return [];
   }
 
   return args;
