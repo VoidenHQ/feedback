@@ -71,6 +71,23 @@
   "build": {
     "appId": "md.voiden.app",
     "productName": "Voiden",
+    "executableName": "Voiden",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "src/images/icon.ico",
+      "artifactName": "Voiden Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "shortcutName": "Voiden",
+      "uninstallDisplayName": "Voiden",
+      "installerIcon": "src/images/icon.ico",
+      "uninstallerIcon": "src/images/icon.ico",
+      "installerHeaderIcon": "src/images/icon.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true
+    },
     "linux": {
       "icon": "src/images/icon.png",
       "category": "Development"
