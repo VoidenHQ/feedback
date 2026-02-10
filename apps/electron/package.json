@@ -70,7 +70,7 @@
   },
   "build": {
     "appId": "md.voiden.app",
-    "productName": "Voiden",
+    "productName": "voiden",
     "executableName": "Voiden",
     "win": {
       "target": [
@@ -80,6 +80,8 @@
       "artifactName": "Voiden Setup ${version}.${ext}"
     },
     "nsis": {
+      "oneClick": true,
+      "perMachine": true,
       "shortcutName": "Voiden",
       "uninstallDisplayName": "Voiden",
       "installerIcon": "src/images/icon.ico",

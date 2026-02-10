@@ -468,7 +468,7 @@ function setupAutoUpdaterListeners() {
       detail: "The application will restart to complete the installation.",
     }).then((restartResponse) => {
       if (restartResponse.response === 0) {
-        autoUpdater.quitAndInstall();
+        autoUpdater.quitAndInstall(true, true);
       } else {
         setUpdateState(UpdateState.IDLE);
       }
