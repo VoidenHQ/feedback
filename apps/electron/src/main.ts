@@ -188,5 +188,7 @@ const settings = getSettings();
 const updateChannel = settings.updates?.channel || "stable";
 initializeUpdates(updateChannel);
 
+} // end of !started block
+
 
 
