@@ -313,14 +313,12 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
   const arch = process.arch;
   const currentVersion = app.getVersion();
 
-  if (platform === "win32" || platform === "darwin") {
-    // Setup autoUpdater event listeners for progress tracking
+  if (platform === "darwin" || platform === "win32") {
+    // Both macOS and Windows use electron-updater natively (NSIS on Windows)
     setupAutoUpdaterListeners();
 
-    // Choose channel path based on channel preference
     const channelPath = channel === "early-access" ? "beta" : "stable";
 
-    // Configure electron-updater
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.setFeedURL({
@@ -348,30 +346,28 @@ export function initializeUpdates(channel: "stable" | "early-access" = "stable")
   } else if (platform === "linux") {
     app.whenReady().then(() => {
       setTimeout(() => {
-         if (!isUpdateInProgress()) {
-            checkForLinuxUpdate(currentVersion, channel);
-         }
+        if (!isUpdateInProgress()) {
+          checkForLinuxUpdate(currentVersion, channel);
+        }
       }, 10_000);
     });
   }
 }
 
 // Manual update check function
-export function checkForUpdatesManually(channel: "stable" | "early-access" = "stable"): Promise<{ available: boolean; version?: string }> {
-  return new Promise((resolve) => {
-    if (isUpdateInProgress()) {
-      showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
-      resolve({ available: false });
-      return;
-    }
+export async function checkForUpdatesManually(channel: "stable" | "early-access" = "stable"): Promise<{ available: boolean; version?: string }> {
+  if (isUpdateInProgress()) {
+    showToast("info", "Update In Progress", "An update is already in progress. Please wait for it to complete.");
+    return { available: false };
+  }
 
-    const platform = process.platform;
-    const currentVersion = app.getVersion();
+  const platform = process.platform;
+  const currentVersion = app.getVersion();
 
-    if (platform === "linux") {
+  if (platform === "linux") {
+    return new Promise((resolve) => {
       setUpdateState(UpdateState.CHECKING);
 
-      // For Linux, we need to check manually via latest.json
       const channelPath = channel === "early-access" ? "beta" : "stable";
       const latestUrl = `https://voiden.md/api/download/${channelPath}/linux/latest.json`;
 
@@ -395,7 +391,6 @@ export function checkForUpdatesManually(channel: "stable" | "early-access" = "st
               if (semver.valid(latestVersion) && semver.gt(latestVersion, currentVersion)) {
                 resolve({ available: true, version: latestVersion });
               } else {
-                setUpdateState(UpdateState.IDLE);
                 resolve({ available: false });
               }
             } catch (err) {
@@ -408,84 +403,26 @@ export function checkForUpdatesManually(channel: "stable" | "early-access" = "st
           setUpdateState(UpdateState.ERROR);
           resolve({ available: false });
         });
-    } else if (platform === "win32" || platform === "darwin") {
+    });
+  } else if (platform === "win32" || platform === "darwin") {
+    // Use electron-updater directly for both macOS and Windows (NSIS)
+    try {
       setUpdateState(UpdateState.CHECKING);
+      const result = await autoUpdater.checkForUpdates();
+      setUpdateState(UpdateState.IDLE);
 
-      // For Windows/macOS, check if RELEASES file exists and parse it
-      const channelPath = channel === "early-access" ? "beta" : "stable";
-      const arch = process.arch;
-
-      // Use RELEASES.json for macOS, RELEASES for Windows
-      const releasesFile = platform === "darwin" ? "RELEASES.json" : "RELEASES";
-      const releasesUrl = `https://voiden.md/api/download/${channelPath}/${platform}/${arch}/${releasesFile}`;
-
-      const requestOptions = {
-        headers: {
-          'User-Agent': `Voiden/${currentVersion} (${process.platform}: ${process.arch})`,
-        },
-      };
-
-      https
-        .get(releasesUrl, requestOptions, (res) => {
-          // Check for non-200 status codes
-          if (res.statusCode !== 200) {
-            console.error(`Failed to fetch ${releasesFile}: HTTP ${res.statusCode}`);
-            setUpdateState(UpdateState.ERROR);
-            resolve({ available: false });
-            return;
-          }
-
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            try {
-              let latestVersion: string | null = null;
-
-              if (platform === "win32") {
-                // Parse Windows RELEASES file (plain text format)
-                // Format: SHA1 filename size
-                // Example: A1B2C3D4... Voiden-1.0.0-full.nupkg 12345678
-                const lines = data.split("\n").filter((line) => line.trim());
-                for (const line of lines) {
-                  // Match stable (voiden-1.1.0-full.nupkg), beta (voiden-1.1.0-beta.20-full.nupkg), and dev (voiden-1.1.0-dev.20-full.nupkg)
-                  const match = line.match(/voiden-(\d+\.\d+\.\d+(?:-(?:beta|dev)\.\d+)?)-full\.nupkg/i);
-                  if (match) {
-                    latestVersion = match[1];
-                    break;
-                  }
-                }
-              } else {
-                // Parse macOS RELEASES.json file
-                const releases = JSON.parse(data);
-                latestVersion = releases.currentRelease;
-              }
-
-              setUpdateState(UpdateState.IDLE);
-
-              if (latestVersion && semver.valid(latestVersion) && semver.gt(latestVersion, currentVersion)) {
-                // Don't reset to IDLE here - let the download process handle state
-                resolve({ available: true, version: latestVersion });
-              } else {
-                setUpdateState(UpdateState.IDLE);
-                resolve({ available: false });
-              }
-            } catch (err) {
-              // Log error for debugging
-              console.error(`Failed to parse ${releasesFile}:`, err, "Data:", data);
-              setUpdateState(UpdateState.ERROR);
-              resolve({ available: false });
-            }
-          });
-        })
-        .on("error", (err) => {
-          console.error(`Error fetching ${releasesFile} from`, releasesUrl, ":", err);
-          setUpdateState(UpdateState.ERROR);
-          resolve({ available: false });
-        });
-    } else {
-      resolve({ available: false });
+      if (result?.updateInfo && semver.gt(result.updateInfo.version, currentVersion)) {
+        return { available: true, version: result.updateInfo.version };
+      }
+      return { available: false };
+    } catch (err) {
+      console.error("Manual update check failed:", err);
+      setUpdateState(UpdateState.ERROR);
+      return { available: false };
     }
-  });
+  }
+
+  return { available: false };
 }
 
 // Setup autoUpdater event listeners once
@@ -531,7 +468,7 @@ function setupAutoUpdaterListeners() {
       detail: "The application will restart to complete the installation.",
     }).then((restartResponse) => {
       if (restartResponse.response === 0) {
-        autoUpdater.quitAndInstall();
+        autoUpdater.quitAndInstall(true, true);
       } else {
         setUpdateState(UpdateState.IDLE);
       }
@@ -642,7 +579,7 @@ export function registerUpdateIpcHandlers() {
           });
         });
       } else {
-        // For Windows/macOS, manually trigger the update download
+        // For Windows/macOS, download via electron-updater
         app.focus();
         dialog.showMessageBox({
           type: "info",
@@ -657,12 +594,7 @@ export function registerUpdateIpcHandlers() {
             try {
               setUpdateState(UpdateState.DOWNLOADING);
               sendUpdateProgressToWindows({ status: "downloading", percent: 0 });
-              // Use electron-updater to check and download the update
-              const updateCheckResult = await autoUpdater.checkForUpdates();
-              if (updateCheckResult) {
-                // Download the update - progress will be reported via download-progress event
-                await autoUpdater.downloadUpdate();
-              }
+              await autoUpdater.downloadUpdate();
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               setUpdateState(UpdateState.ERROR);

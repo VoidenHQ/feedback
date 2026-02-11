@@ -11,11 +11,13 @@ export async function handleCliArguments(
   args: string[]
 ) {
 
-  // Filter out Electron/Chromium/Squirrel arguments
+  // Filter out Electron/Chromium/NSIS installer arguments
   const userArgs = args.filter(arg =>
     !arg.includes('electron') &&
     !arg.endsWith('.js') &&
-    !arg.startsWith('--squirrel-') &&
+    !arg.startsWith('--updated') &&
+    !arg.startsWith('--force-run') &&
+    !arg.startsWith('--squirrel') &&
     arg !== ''
   );
 
@@ -74,19 +76,12 @@ async function openPath(inputPath: string): Promise<void> {
   const resolvedPath = await resolveToAbsolutePath(inputPath);
   if (!resolvedPath || !fs.existsSync(resolvedPath)) {
     console.warn('[CLI] Could not resolve path:', inputPath);
-    // Open default Voiden directory
+    // If a window already exists, just focus it
     const mainWindow = windowManager.browserWindow as BrowserWindow;
     if (mainWindow) {
-      mainWindow.focus()
-    } else {
-      dialog.showMessageBox(null, {
-        type: "info",
-        title: "Location Not Found",
-        message:
-          "The selected location could not be found. Please check the path and try again.",
-        buttons: ["OK"]
-      });
+      mainWindow.focus();
     }
+    // Otherwise skip silently — loadAllWindows() will handle normal restoration
     return;
   }
 
@@ -161,12 +156,6 @@ export function getCliArguments(): string[] {
     // On macOS/Linux: ['app-path', 'file.void']
     // On Windows: ['app-path', 'file.void']
     args = process.argv.slice(1);
-  }
-
-  // If launched by Squirrel (e.g. --squirrel-firstrun after install),
-  // return no arguments so the app opens with its default state
-  if (args.some(arg => arg.startsWith('--squirrel-'))) {
-    return [];
   }
 
   return args;
