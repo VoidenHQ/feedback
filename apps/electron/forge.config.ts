@@ -101,12 +101,8 @@ if (isMac) {
   makers.push({
     name: "@felixrieseberg/electron-forge-maker-nsis",
     config: {
-      codesigning: process.env.WINDOWS_CERTIFICATE_FILE
-        ? {
-            certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
-            certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
-          }
-        : undefined,
+      // Note: Code signing is handled by sign.js (referenced in package.json)
+      // which uses the WINDOWS_CERT_THUMBPRINT environment variable from .env
       updater: {
         url: `https://voiden.md/api/download/${releaseChannel}/win32/${process.arch}`,
         updaterCacheDirName: "voiden-updater",
