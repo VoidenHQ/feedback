@@ -1,5 +1,4 @@
 import { ForgeConfig } from "@electron-forge/shared-types";
-import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerDMG } from "@electron-forge/maker-dmg";
@@ -99,14 +98,22 @@ if (isMac) {
     }))
   );
 } else if (isWindows) {
-  makers.push(
-    new MakerSquirrel({
-      iconUrl: "https://assets.apyhub.com/images/icon.ico",
-      setupIcon: "./src/images/icon.ico",
-      certificateFile: process.env.WINDOWS_CERTIFICATE_FILE, // e.g., C:\Users\You\cert.pfx
-      certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
-    })
-  );
+  makers.push({
+    name: "@felixrieseberg/electron-forge-maker-nsis",
+    config: {
+      codesigning: process.env.WINDOWS_CERTIFICATE_FILE
+        ? {
+            certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
+            certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
+          }
+        : undefined,
+      updater: {
+        url: `https://voiden.md/api/download/${releaseChannel}/win32/${process.arch}`,
+        updaterCacheDirName: "voiden-updater",
+        channel: "latest",
+      },
+    },
+  });
 } else if (isLinux) {
   makers.push(
     new MakerDeb({
@@ -169,7 +176,7 @@ const config: ForgeConfig = {
     // Generate app-update.yml in the packaged app's resources directory
     // This tells electron-updater where to check for updates (without needing electron-builder)
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
-      if (platform !== "darwin" && platform !== "win32") return;
+      if (platform !== "darwin") return;
 
       const resourcesPath = path.resolve(buildPath, "..");
       const yml = await getAppUpdateYml({
@@ -185,7 +192,7 @@ const config: ForgeConfig = {
       for (const result of makeResults) {
         const { platform, arch, artifacts } = result;
 
-        // Find the main artifact (zip for mac, exe/nupkg for windows)
+        // Find the main artifact (zip for mac, exe for windows)
         for (const artifactPath of artifacts) {
           const fileName = path.basename(artifactPath);
           const artifactDir = path.dirname(artifactPath);

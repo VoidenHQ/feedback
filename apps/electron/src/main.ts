@@ -1,7 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
-import started from "electron-squirrel-startup";
-
 import { ipcStateHandlers } from "./main/state";
 import { registerSettingsIpc, getSettings } from "./main/settings";
 import { registerFontsIpc } from "./main/fonts";
@@ -30,14 +28,6 @@ import "./main/voiden";
 import "./main/env";
 import "./main/utils";
 import "./main/variables";
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-// During Squirrel events (install/update/uninstall), skip all app initialization
-// to avoid "location could not be found" errors from accessing paths that
-// don't exist yet during the install process.
-if (started) {
-  app.quit();
-} else {
 
 const gotTheLock = app.requestSingleInstanceLock({ args: getCliArguments() });
 
@@ -199,5 +189,6 @@ const updateChannel = settings.updates?.channel || "stable";
 initializeUpdates(updateChannel);
 
 } // end of !started block
+
 
 
