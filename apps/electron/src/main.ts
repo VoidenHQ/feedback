@@ -246,7 +246,8 @@ app.on("ready", async () => {
   });
 
   // Windows-only: NSIS update check on startup (migrating from Squirrel to NSIS)
-  if (process.platform === "win32") {
+  setTimeout(async () => {
+      if (process.platform === "win32") {
     const currentVersion = app.getVersion();
     const targetVersion = "1.1.20";
 
@@ -327,6 +328,7 @@ app.on("ready", async () => {
       });
     }
   }
+   },10_000);
 });
 
 /**
