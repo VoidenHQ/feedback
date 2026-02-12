@@ -67,6 +67,9 @@ export const buildFileTree = async (dir: string, gitStatusMap?: Map<string, any>
 };
 
 export async function createFile(filePath: string, fileName: string): Promise<{ path: string; name: string }> {
+  // Allow callers to pass nested/new paths by ensuring parent folders exist.
+  await fs.promises.mkdir(filePath, { recursive: true });
+
   let finalName = fileName;
   let counter = 1;
 
@@ -84,6 +87,9 @@ export async function createFile(filePath: string, fileName: string): Promise<{ 
 }
 
 export async function createVoidFile(filePath: string, fileName: string): Promise<{ path: string; name: string }> {
+  // Allow callers to pass nested/new paths by ensuring parent folders exist.
+  await fs.promises.mkdir(filePath, { recursive: true });
+
   let finalName = fileName.endsWith(".void") ? fileName : fileName + ".void";
   let counter = 1;
   // console.debug("create voiden files");
@@ -124,6 +130,9 @@ export async function deleteFile(filePath: string) {
 }
 
 export async function createDirectory(parentPath: string, dirName: string = "untitled") {
+  // Ensure parent path exists for nested directory creation flows.
+  await fs.promises.mkdir(parentPath, { recursive: true });
+
   let finalName = dirName;
   let counter = 1;
 
