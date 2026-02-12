@@ -558,6 +558,7 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
         path: node.data.path,
         type: node.data.type,
         name: node.data.name,
+        isProjectRoot: node.level === 0,
       });
     }
   };
@@ -1102,6 +1103,7 @@ export const FileSystemList = () => {
             path: data.path,
             type: data.type,
             name: data.name,
+            isProjectRoot: true,
           });
         }
       }}
@@ -1273,6 +1275,7 @@ export const FileSystemList = () => {
                   path: data.path,
                   type: data.type,
                   name: data.name,
+                  isProjectRoot: true,
                 });
               }
             }}

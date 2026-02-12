@@ -21,11 +21,14 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
 
   ipcMain.on("show-file-context-menu", (event, data) => {
     let menu;
-    const appState = getAppState(event);
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
-    // Check if this is the root folder of the current project
+    // Explicit root hint from renderer. Falls back to previous inference for compatibility.
+    const appState = getAppState(event);
     const isRootFolder =
-      appState.activeDirectory === data.path || Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path);
+      data.isProjectRoot === true ||
+      (data.isProjectRoot === undefined &&
+        (appState.activeDirectory === data.path ||
+          Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path)));
 
     if (data.type === "folder") {
       const menuTemplate: MenuItemConstructorOptions[] = [
