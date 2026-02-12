@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, shell } from "electron";
+import { BrowserWindow, dialog, shell, MenuItemConstructorOptions } from "electron";
 
 import { ipcMain } from "electron";
 import path from "node:path";
@@ -28,7 +28,7 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
       appState.activeDirectory === data.path || Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path);
 
     if (data.type === "folder") {
-      const menuTemplate = [
+      const menuTemplate: MenuItemConstructorOptions[] = [
         {
           label: "New Voiden file...",
           click: async () => {
@@ -61,15 +61,22 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
             shell.showItemInFolder(data.path);
           },
         },
-        { type: "separator" as const },
-        {
-          label: "Close Project",
-          click: async () => {
-            senderWindow?.webContents.send("directory:close-project", {});
-          },
-        },
-        { type: "separator" as const },
       ];
+
+      if (isRootFolder) {
+        menuTemplate.push(
+          { type: "separator" as const },
+          {
+            label: "Close Project",
+            click: async () => {
+              senderWindow?.webContents.send("directory:close-project", {});
+            },
+          },
+          { type: "separator" as const },
+        );
+      } else {
+        menuTemplate.push({ type: "separator" as const });
+      }
 
       // Only add rename and delete options if not the root folder
       if (!isRootFolder) {

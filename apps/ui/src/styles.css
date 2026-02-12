@@ -135,6 +135,7 @@
     --editor-selection: var(--selection, #409fff40);
     --code-selection: var(--selection, #409fff40);
     --ui-selection-normal: var(--selection, #409fff40);
+    --ui-hover: var(--hover, #ffffff14);
 
     /* Semantic color aliases - Success */
     --icon-success: var(--success, #87d96c);
