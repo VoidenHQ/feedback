@@ -5,6 +5,7 @@
  */
 
 import { VoidenFakerExtension } from './extension';
+import { mountFakerHoverTooltip, unmountFakerHoverTooltip } from './lib/fakerHoverTooltip';
 
 const voidenFakerPlugin = (context: any) => {
   // Create extension instance
@@ -47,6 +48,7 @@ const voidenFakerPlugin = (context: any) => {
 
   return {
     onload: async () => {
+      mountFakerHoverTooltip();
 
       // Register Tiptap suggestion extension dynamically
       const { FakerSuggestion } = await import('./lib/fakerSuggestion');
@@ -68,6 +70,7 @@ const voidenFakerPlugin = (context: any) => {
     },
 
     onunload: async () => {
+      unmountFakerHoverTooltip();
       await extension.onUnload?.();
 
       // Unregister Tiptap extension

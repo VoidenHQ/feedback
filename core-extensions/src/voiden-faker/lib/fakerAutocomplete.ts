@@ -1,5 +1,5 @@
 import { CompletionContext, CompletionResult, autocompletion } from '@codemirror/autocomplete';
-import { FAKER_FUNCTIONS } from './fakerEngine';
+import { FAKER_FUNCTIONS, getFakerInsertText } from './fakerEngine';
 
 /**
  * CodeMirror autocomplete for {{$faker.XXX()}} in code bodies
@@ -44,8 +44,9 @@ export function fakerAutocomplete() {
         const from = context.pos - partialPath.length;
 
         // Filter functions that match the partial path
-        const matchingFunctions = FAKER_FUNCTIONS.filter(fn =>
-          fn.path.startsWith(partialPath)
+        const normalizedQuery = partialPath.toLowerCase();
+        const matchingFunctions = FAKER_FUNCTIONS.filter((fn) =>
+          fn.path.toLowerCase().includes(normalizedQuery)
         );
 
         if (matchingFunctions.length === 0) {
@@ -55,14 +56,32 @@ export function fakerAutocomplete() {
         return {
           from,
           to: context.pos,
-          options: matchingFunctions.map(fn => ({
-            label: fn.path,
-            type: 'function',
-            detail: fn.example,
-            info: fn.description,
-            apply: `${fn.path}()}}`,  // Complete with () and closing }}
-            boost: fn.path.split('.').length,  // Boost shorter paths
-          })),
+          options: matchingFunctions.flatMap((fn) => {
+            const baseOption = {
+              label: fn.path,
+              type: 'function' as const,
+              detail: fn.example,
+              info: fn.description,
+              apply: getFakerInsertText(fn.path),
+              boost: fn.path.split('.').length,
+            };
+
+            if (!fn.argsTemplate) {
+              return [baseOption];
+            }
+
+            return [
+              baseOption,
+              {
+                label: `${fn.path} (params)`,
+                type: 'function' as const,
+                detail: fn.argsTemplate,
+                info: `${fn.description} (with parameter template)`,
+                apply: getFakerInsertText(fn.path, true),
+                boost: Math.max(1, fn.path.split('.').length - 1),
+              },
+            ];
+          }),
           validFor: /^[a-zA-Z.]*$/,  // Only valid for letters and dots
         };
       },
@@ -70,7 +89,7 @@ export function fakerAutocomplete() {
 
     // Configuration
     activateOnTyping: true,
-    maxRenderedOptions: 15,
+    maxRenderedOptions: 500,
     defaultKeymap: true,
   });
 }
