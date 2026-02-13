@@ -116,6 +116,20 @@ We welcome contributions! Please read:
 - [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
 - [Security Policy](SECURITY.md) - Reporting vulnerabilities
 
+## Milestones
+
+Track our progress and see what's coming next:
+
+### 🎯 Current Sprint
+👉 **[View active milestone →](https://github.com/voidenhq/voiden/milestones)**
+
+We organize our work into milestones that group related issues and features. Each milestone includes:
+- **Planned features** for the release
+- **Bug fixes** in progress
+- **Target release date**
+
+---
+
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
