@@ -42,6 +42,7 @@ dist-ssr
 # electron build target
 out
 .vite
+.claude
 
 /apps/cli/tokensInfo.json
 /apps/cli/environmentInfo.json
