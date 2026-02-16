@@ -137,6 +137,10 @@ export const requestApi = {
 
 };
 
+export const scriptApi = {
+  executePython: (payload: any) => ipcRenderer.invoke("script:executePython", payload),
+};
+
 export const fileLinkApi = {
   exists: (absolutePath: string) => ipcRenderer.invoke("fileLink:exists", absolutePath),
 };
@@ -175,7 +179,10 @@ export const cliApi = {
 
 export const variablesApi = {
   getKeys: () => ipcRenderer.invoke("variables:getKeys"),
-  writeVariables: (content: { [key: string]: string }) => ipcRenderer.invoke("variables:writeVariables", content),
+  read: () => ipcRenderer.invoke("variables:read"),
+  get: (key: string) => ipcRenderer.invoke("variables:get", key),
+  set: (key: string, value: any) => ipcRenderer.invoke("variables:set", key, value),
+  writeVariables: (content: string | Record<string, any>) => ipcRenderer.invoke("variables:writeVariables", content),
 }
 
 export const mainWindow = {

@@ -17,6 +17,7 @@ export { default as openapiImportPlugin } from './openapi-import';
 export { default as simpleAssertionsPlugin } from './simple-assertions';
 export { default as createSocketPlugin } from './voiden-sockets';
 export { default as createGraphQLPlugin } from './voiden-graphql';
+export { default as voidenScriptingPlugin } from './voiden-scripting';
 
 // Export REST API utilities (consolidated in voiden-rest-api)
 export * from './voiden-rest-api';

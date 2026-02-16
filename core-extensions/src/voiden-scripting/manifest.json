@@ -1,0 +1,52 @@
+{
+  "id": "voiden-scripting",
+  "name": "Voiden Scripting",
+  "version": "1.0.0",
+  "description": "Pre-request and post-response JavaScript scripting for API requests with vd API access",
+  "author": "Voiden Team",
+  "enabled": true,
+  "priority": 25,
+  "readme": "Add JavaScript pre-request and post-response scripts to your API requests. Use the vd API to read/write request data, access environment variables, and control request flow. Insert with /pre-script and /post-script slash commands.",
+  "capabilities": {
+    "blocks": {
+      "owns": ["pre_script", "post_script"],
+      "allowExtensions": false
+    },
+    "pipeline": {
+      "hooks": ["pre-processing", "pre-send", "post-processing"]
+    },
+    "slashCommands": {
+      "groups": [
+        {
+          "name": "Scripting",
+          "commands": ["Insert Pre-Request Script", "Insert Post-Response Script"]
+        }
+      ]
+    },
+    "sidebar": {
+      "tabs": [
+        {
+          "id": "script-logs",
+          "title": "Script Logs",
+          "side": "right",
+          "icon": "Logs"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "core": "^1.0.0",
+    "sdk": "^1.0.0"
+  },
+  "features": [
+    "Pre-request JavaScript scripts (runs before request is sent)",
+    "Post-response JavaScript scripts (runs after response is received)",
+    "vd.request API for reading/writing request data",
+    "vd.response API for reading response data",
+    "vd.env.get/set for environment variable access",
+    "vd.variables.get/set for Voiden runtime variable access",
+    "vd.log() for script output logging",
+    "vd.cancel() to cancel request from pre-script",
+    "CodeMirror JavaScript editor with syntax highlighting"
+  ]
+}

@@ -79,11 +79,26 @@ function insertEmptyLineMarkers(markdown: string) {
   const lines = markdown.split(/\r?\n/);
   const resultLines: string[] = [];
   let previousWasEmpty = false;
+  let inFencedBlock = false;
 
   for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^```/.test(trimmed)) {
+      inFencedBlock = !inFencedBlock;
+      resultLines.push(line);
+      previousWasEmpty = false;
+      continue;
+    }
+
+    if (inFencedBlock) {
+      resultLines.push(line);
+      previousWasEmpty = false;
+      continue;
+    }
+
     if (line.trim() === "") {
       if (previousWasEmpty) {
-        resultLines.push("%%EMPTY_LINE%%\n");
+        resultLines.push("%%EMPTY_LINE%%");
       } else {
         resultLines.push("");
       }
@@ -456,6 +471,26 @@ const processCubeBlockText = (text: string, schema?: any): JSONContent => {
       content: [{ type: "text", text: rawCubeText }],
     };
   }
+
+  // Restore empty-line placeholders that may appear inside YAML scalar values
+  // (e.g. attrs.body for script/code nodes) back to real blank lines.
+  const restoreEmptyLineMarkers = (value: any): any => {
+    if (typeof value === "string") {
+      return value.replace(/%%EMPTY_LINE%%/g, "");
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => restoreEmptyLineMarkers(item));
+    }
+    if (value && typeof value === "object") {
+      const result: Record<string, any> = {};
+      Object.entries(value).forEach(([k, v]) => {
+        result[k] = restoreEmptyLineMarkers(v);
+      });
+      return result;
+    }
+    return value;
+  };
+  nodeJson = restoreEmptyLineMarkers(nodeJson);
 
   if (schema && !schema.nodes[nodeJson.type]) {
     return {

@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { globalSaveFile } from "@/core/file-system/hooks";
 import { useLoadEnv, useSetActiveEnv } from "@/core/environment/hooks";
 import { reloadAllTabs } from "@/core/git/hooks/useGit";
-import { toast } from "sonner";
+import { toast } from "@/core/components/ui/sonner";
 
 // Define the shape of our context.
 interface ElectronEventContextType {

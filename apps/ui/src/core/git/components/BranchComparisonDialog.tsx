@@ -4,7 +4,7 @@ import { Command } from "cmdk";
 import { useEffect, useState, useRef } from "react";
 import { useGetGitBranches } from "@/core/git/hooks";
 import { useGetProjects } from "@/core/projects/hooks";
-import { toast } from "sonner";
+import { toast } from "@/core/components/ui/sonner";
 import { useAddPanelTab } from "@/core/layout/hooks";
 
 interface BranchComparisonDialogProps {
