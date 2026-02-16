@@ -237,6 +237,7 @@ export const REQUEST_NODES = [
   "multipart-table",
   "json_body",
   "xml_body",
+  "yml_body",
   "auth",       // Authorization block
   "pre_request_block",
   "post_request_block",
@@ -660,6 +661,24 @@ export const getRequest = async (
    * Get content type from editor nodes
    */
   const getContentType = () => {
+    const normalizedHeaderContentType = (() => {
+      const headersTable = getTable("headers-table", editor, environment);
+      const contentTypeHeader = headersTable.find((h) => h.key?.toLowerCase() === "content-type");
+      return contentTypeHeader?.value?.split(";")[0]?.trim()?.toLowerCase() || "";
+    })();
+
+    if (normalizedHeaderContentType) {
+      if (["application/json", "application/hal+json", "text/json"].includes(normalizedHeaderContentType)) {
+        return "application/json";
+      }
+      if (["application/xml", "text/xml"].includes(normalizedHeaderContentType)) {
+        return "application/xml";
+      }
+      if (["application/x-yaml", "application/yaml", "text/yaml", "text/x-yaml"].includes(normalizedHeaderContentType)) {
+        return "application/x-yaml";
+      }
+    }
+
     let contentType = "none";
 
     editor.content?.forEach((node) => {
@@ -671,6 +690,8 @@ export const getRequest = async (
         contentType = "application/json";
       } else if (node.type === "xml_body") {
         contentType = "application/xml";
+      } else if (node.type === "yml_body") {
+        contentType = "application/x-yaml";
       } else if (node.type === "file") {
         contentType = getFileExtension(node.attrs?.extension || "");
       }
@@ -840,24 +861,53 @@ export const getRequest = async (
   };
 
   const getRequestBody = () => {
-    const jsonContent = editor.content?.filter((val) => val.type === "json_body");
-    const xmlContent = editor.content?.filter((val) => val.type === "xml_body");
+    const getHeaderContentType = () => {
+      const headersTable = getTable("headers-table", editor, environment);
+      const contentTypeHeader = headersTable.find((h) => h.key?.toLowerCase() === "content-type");
+      return contentTypeHeader?.value?.split(";")[0]?.trim()?.toLowerCase() || "";
+    };
 
-    if (xmlContent && xmlContent.length > 0) {
-      const localXml = xmlContent.find((item) => !item?.attrs?.importedFrom);
-      const importedXml = xmlContent.find((item) => item?.attrs?.importedFrom);
+    const pickBodyNode = (type: "json_body" | "xml_body" | "yml_body") => {
+      const nodes = editor.content?.filter((val) => val.type === type);
+      if (!nodes || nodes.length === 0) return null;
+      const local = nodes.find((item) => !item?.attrs?.importedFrom);
+      if (local) return local;
+      return nodes.find((item) => item?.attrs?.importedFrom) || null;
+    };
 
-      if (localXml) {
-        const body = localXml.attrs?.body || "";
-        return body;
+    const pickLatestBodyNode = () => {
+      const bodyNodeTypes = new Set(["json_body", "xml_body", "yml_body"]);
+      for (let i = (editor.content?.length || 0) - 1; i >= 0; i--) {
+        const node = editor.content?.[i];
+        if (node?.type && bodyNodeTypes.has(node.type)) {
+          return node;
+        }
       }
-      if (importedXml) {
-        const body = importedXml.attrs?.body || "";
-        return body;
-      }
+      return null;
+    };
+
+    const headerContentType = getHeaderContentType();
+
+    let selectedNode: JSONContent | null = null;
+    if (["application/json", "application/hal+json", "text/json"].includes(headerContentType)) {
+      selectedNode = pickBodyNode("json_body");
+    } else if (["application/xml", "text/xml"].includes(headerContentType)) {
+      selectedNode = pickBodyNode("xml_body");
+    } else if (["application/x-yaml", "application/yaml", "text/yaml", "text/x-yaml"].includes(headerContentType)) {
+      selectedNode = pickBodyNode("yml_body");
+    } else {
+      selectedNode = pickLatestBodyNode();
     }
 
-    const content = jsonContent;
+    if (!selectedNode) {
+      selectedNode = pickLatestBodyNode();
+    }
+
+    if (selectedNode?.type === "xml_body" || selectedNode?.type === "yml_body") {
+      return selectedNode.attrs?.body || "";
+    }
+
+    const content = selectedNode?.type === "json_body" ? [selectedNode] : editor.content?.filter((val) => val.type === "json_body");
 
     const importedBodies = content?.filter((item) => item?.attrs?.importedFrom);
     const localBodies = content?.filter((item) => !item?.attrs?.importedFrom);
