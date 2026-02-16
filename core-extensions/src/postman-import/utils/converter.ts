@@ -98,91 +98,98 @@ function detectBodyLanguage(body: PostmanRequestBody): 'json' | 'xml' | 'html' |
  * Uses voiden-rest-api helpers to create blocks properly
  */
 export const convertPostmanRequestToVoidenSchema = async (data: PostmanRequest): Promise<string> => {
-  const helpers = getVoidenApiHelpers();
+  try {
+    const helpers = getVoidenApiHelpers();
 
-  // Build voiden blocks using the exposed helpers
-  const blocks: any[] = [];
+    // Build voiden blocks using the exposed helpers
+    const blocks: any[] = [];
 
-  // 1. Request block (method + url)
-  const requestBlock = {
-    type: 'request',
-    content: [
-      helpers.createMethodNode(data.request.method),
-      helpers.createUrlNode(normalizePostmanUrl(data.request.url))
-    ]
-  };
-  blocks.push(requestBlock);
+    // 1. Request block (method + url)
+    const requestBlock = {
+      type: 'request',
+      content: [
+        helpers.createMethodNode(data.request.method),
+        helpers.createUrlNode(normalizePostmanUrl(data.request.url))
+      ]
+    };
+    blocks.push(requestBlock);
 
-  // 2. Headers (merge auth headers with existing headers)
-  // Filter out disabled headers
-  const authHeaders = convertAuthToHeaders(data.request.auth);
-  const activeHeaders = (data.request.header || []).filter(h => !h.disabled);
-  const allHeaders = [...authHeaders, ...activeHeaders];
+    // 2. Headers (merge auth headers with existing headers)
+    // Filter out disabled headers
+    const authHeaders = convertAuthToHeaders(data.request.auth);
+    const activeHeaders = (data.request.header || []).filter(h => !h.disabled);
+    const allHeaders = [...authHeaders, ...activeHeaders];
 
-  if (allHeaders.length > 0) {
-    const headersBlock = helpers.createHeadersTableNode(
-      allHeaders.map(h => [h.key, h.value] as [string, string])
-    );
-    blocks.push(headersBlock);
-  }
-
-  // 3. Query parameters (v2.1.0 format)
-  // Filter out disabled query params
-  if (typeof data.request.url === 'object' && data.request.url.query && data.request.url.query.length > 0) {
-    const activeQueries = data.request.url.query.filter(q => !q.disabled);
-    if (activeQueries.length > 0) {
-      const queryBlock = helpers.createQueryTableNode(
-        activeQueries.map(q => [q.key, q.value] as [string, string])
+    if (allHeaders.length > 0) {
+      const headersBlock = helpers.createHeadersTableNode(
+        allHeaders.map(h => [h.key, h.value] as [string, string])
       );
-      blocks.push(queryBlock);
-    }
-  }
-
-  // 4. Request Body
-  if (data.request.body) {
-    const body = data.request.body;
-
-    // 4a. Raw body (JSON, XML, HTML, Text)
-    if (body.mode === "raw" && body.raw) {
-      const language = detectBodyLanguage(body);
-
-      if (language === 'json') {
-        blocks.push(helpers.createJsonBodyNode(body.raw, "json"));
-      } else if (language === 'xml') {
-        blocks.push(helpers.createXMLBodyNode(body.raw, "xml"));
-      } else if (language === 'html') {
-        blocks.push(helpers.createXMLBodyNode(body.raw, "html"));
-      } else {
-        // For plain text, use JSON body node with text type
-        blocks.push(helpers.createJsonBodyNode(body.raw, "text"));
-      }
+      blocks.push(headersBlock);
     }
 
-    // 4b. URL-encoded form data (application/x-www-form-urlencoded)
-    else if (body.mode === "urlencoded" && body.urlencoded && body.urlencoded.length > 0) {
-      const activeParams = body.urlencoded.filter(f => !f.disabled);
-      if (activeParams.length > 0) {
-        const urlencodedBlock = helpers.createUrlTableNode(
-          activeParams.map(f => [f.key, f.value] as [string, string])
+    // 3. Query parameters (v2.1.0 format)
+    // Filter out disabled query params
+    if (typeof data.request.url === 'object' && data.request.url.query && data.request.url.query.length > 0) {
+      const activeQueries = data.request.url.query.filter(q => !q.disabled);
+      if (activeQueries.length > 0) {
+        const queryBlock = helpers.createQueryTableNode(
+          activeQueries.map(q => [q.key, q.value] as [string, string])
         );
-        blocks.push(urlencodedBlock);
+        blocks.push(queryBlock);
       }
     }
 
-    // 4c. Multipart form data
-    else if (body.mode === "formdata" && body.formdata && body.formdata.length > 0) {
-      const activeFormData = body.formdata.filter(f => !f.disabled);
-      if (activeFormData.length > 0) {
-        const multipartBlock = helpers.createMultipartTableNode(
-          activeFormData.map(f => [f.key, f.value] as [string, string])
-        );
-        blocks.push(multipartBlock);
+    // 4. Request Body
+    if (data.request.body) {
+      const body = data.request.body;
+
+      // 4a. Raw body (JSON, XML, HTML, Text)
+      if (body.mode === "raw" && body.raw) {
+        const language = detectBodyLanguage(body);
+
+        if (language === 'json') {
+          blocks.push(helpers.createJsonBodyNode(body.raw, "json"));
+        } else if (language === 'xml') {
+          blocks.push(helpers.createXMLBodyNode(body.raw, "xml"));
+        } else if (language === 'html') {
+          blocks.push(helpers.createXMLBodyNode(body.raw, "html"));
+        } else {
+          // For plain text, use JSON body node with text type
+          blocks.push(helpers.createJsonBodyNode(body.raw, "text"));
+        }
+      }
+
+      // 4b. URL-encoded form data (application/x-www-form-urlencoded)
+      else if (body.mode === "urlencoded" && body.urlencoded && body.urlencoded.length > 0) {
+        const activeParams = body.urlencoded.filter(f => !f.disabled);
+        if (activeParams.length > 0) {
+          const urlencodedBlock = helpers.createUrlTableNode(
+            activeParams.map(f => [f.key, f.value] as [string, string])
+          );
+          blocks.push(urlencodedBlock);
+        }
+      }
+
+      // 4c. Multipart form data
+      else if (body.mode === "formdata" && body.formdata && body.formdata.length > 0) {
+        const activeFormData = body.formdata.filter(f => !f.disabled);
+        if (activeFormData.length > 0) {
+          const multipartBlock = helpers.createMultipartTableNode(
+            activeFormData.map(f => [f.key, f.value] as [string, string])
+          );
+          blocks.push(multipartBlock);
+        }
       }
     }
+
+    // Use helper to convert blocks to .void file format
+    return helpers.convertBlocksToVoidFile(data.name, blocks);
+  } catch (error) {
+    const method = data.request?.method ?? 'UNKNOWN';
+    const url = typeof data.request?.url === 'string' ? data.request.url : data.request?.url?.raw ?? 'unknown url';
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to convert "${data.name}" (${method} ${url}): ${detail}`);
   }
-
-  // Use helper to convert blocks to .void file format
-  return helpers.convertBlocksToVoidFile(data.name, blocks);
 };
 
 /**
@@ -231,6 +238,7 @@ export const processItems = async (
   currentPath: string,
   onProgress?: (current: number, total: number) => void,
   progressState = { current: 0, total: 0 },
+  onError?: (itemName: string, error: unknown) => void,
 ) => {
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -244,9 +252,16 @@ export const processItems = async (
         const folderPath = `${currentPath}/${actualFolderName}`;
 
         // Pass the same progressState object to nested calls
-        await processItems(item.item, folderPath, onProgress, progressState);
-      } else {
-        await createSingleFile(item, currentPath, sanitizeName(item.name));
+        await processItems(item.item, folderPath, onProgress, progressState, onError);
+      } else if (item.request) {
+        try {
+          await createSingleFile(item, currentPath, sanitizeName(item.name));
+        } catch (error) {
+          onError?.(item.name, error);
+          progressState.current += 1;
+          onProgress?.(progressState.current, progressState.total);
+          continue;
+        }
 
         // Increment progress counter
         progressState.current += 1;
@@ -270,7 +285,8 @@ export const processItems = async (
 export const importPostmanCollection = async (
   collection: string,
   activeProject: string,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  onError?: (itemName: string, error: unknown) => void,
 ) => {
   try {
     const json: PostmanCollection = JSON.parse(collection);
@@ -302,7 +318,7 @@ export const importPostmanCollection = async (
     }
 
     // Process items with global progress tracking
-    await processItems(json.item, `${activeProject}/${actualRootFolderName}`, onProgress, progressState);
+    await processItems(json.item, `${activeProject}/${actualRootFolderName}`, onProgress, progressState, onError);
 
     return {
       success: true,
