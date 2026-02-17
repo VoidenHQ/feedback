@@ -1,7 +1,7 @@
 /**
- * Inline ghost-text suggestions for the `vd` scripting API.
+ * Inline ghost-text suggestions for the `voiden` scripting API.
  *
- * Self-limiting: only triggers when user types `vd.` so it won't
+ * Self-limiting: only triggers when user types `voiden.` (or `voiden.`) so it won't
  * interfere with JSON body editors or other CodeMirror instances.
  */
 
@@ -21,7 +21,7 @@ interface VdCompletion {
   apply?: string;
   /** Boost priority (higher = shown first) */
   boost?: number;
-  /** Only available in post-script (has vd.response) */
+  /** Only available in post-script (has voiden.response) */
   postOnly?: boolean;
 }
 
@@ -29,20 +29,20 @@ const VD_COMPLETIONS: VdCompletion[] = [
   // ── Top-level ──────────────────────────────────────────────
   { path: 'request',   type: 'keyword',  detail: 'object',   info: 'Request data (url, method, headers, body, queryParams, pathParams)', boost: 100 },
   { path: 'response',  type: 'keyword',  detail: 'object',   info: 'Response data (status, statusText, headers, body, time, size)', boost: 99, postOnly: true },
-  { path: 'env',       type: 'keyword',  detail: 'object',   info: 'Environment variable access (read-only)', boost: 98 },
   { path: 'variables', type: 'keyword',  detail: 'object',   info: 'Runtime variable access (get, set)', boost: 97 },
-  { path: 'log',       type: 'function', detail: '(...args)', info: 'Log output to console', apply: 'log(', boost: 96 },
-  { path: 'cancel',    type: 'function', detail: '()',        info: 'Cancel the request (pre-script only)', apply: 'cancel()', boost: 95 },
+  { path: 'log',       type: 'function', detail: '(message | level, ...args)', info: 'Log output. Examples: voiden.log("hello"), voiden.log("warn", "rate limited")', apply: 'log(levelOrMessage, ...args)', boost: 96 },
+  { path: 'assert',    type: 'function', detail: '(actual, operator, expectedValue, message?)', info: 'Assertion API. Example: voiden.assert(response.status, "==", 200, "Status OK")', apply: 'assert(actual, operator, expectedValue, message)', boost: 91 },
+  { path: 'cancel',    type: 'function', detail: '()',        info: 'Cancel the request (pre-script only)', apply: 'cancel()', boost: 90 },
 
-  // ── vd.request.* ──────────────────────────────────────────
+  // ── voiden.request.* ──────────────────────────────────────
   { path: 'request.url',         type: 'property', detail: 'string',              info: 'Request URL — read/write' },
   { path: 'request.method',      type: 'property', detail: 'string',              info: 'HTTP method (GET, POST, etc.) — read/write' },
-  { path: 'request.headers',     type: 'property', detail: 'Record<string,string>', info: 'Request headers object — read/write. E.g. vd.request.headers["Authorization"] = "Bearer ..."' },
+  { path: 'request.headers',     type: 'property', detail: 'Record<string,string>', info: 'Request headers object — read/write. E.g. voiden.request.headers["Authorization"] = "Bearer ..."' },
   { path: 'request.body',        type: 'property', detail: 'any',                 info: 'Request body (string or parsed object) — read/write' },
   { path: 'request.queryParams', type: 'property', detail: 'Record<string,string>', info: 'Query parameters object — read/write' },
   { path: 'request.pathParams',  type: 'property', detail: 'Record<string,string>', info: 'Path parameters object — read/write' },
 
-  // ── vd.response.* ─────────────────────────────────────────
+  // ── voiden.response.* ─────────────────────────────────────
   { path: 'response.status',     type: 'property', detail: 'number', info: 'HTTP status code (e.g. 200, 404)', postOnly: true },
   { path: 'response.statusText', type: 'property', detail: 'string', info: 'HTTP status text (e.g. "OK", "Not Found")', postOnly: true },
   { path: 'response.headers',    type: 'property', detail: 'Record<string,string>', info: 'Response headers object', postOnly: true },
@@ -50,12 +50,9 @@ const VD_COMPLETIONS: VdCompletion[] = [
   { path: 'response.time',       type: 'property', detail: 'number', info: 'Response time in milliseconds', postOnly: true },
   { path: 'response.size',       type: 'property', detail: 'number', info: 'Response size in bytes', postOnly: true },
 
-  // ── vd.env.* ──────────────────────────────────────────────
-  { path: 'env.get', type: 'method', detail: '(key: string) → Promise<string | undefined>', info: 'Get an environment variable value. Usage: await vd.env.get("API_KEY")', apply: 'env.get(' },
-
-  // ── vd.variables.* ────────────────────────────────────────
-  { path: 'variables.get', type: 'method', detail: '(key: string) → Promise<any>', info: 'Get a runtime variable from .voiden/.process.env.json. Usage: await vd.variables.get("token")', apply: 'variables.get(' },
-  { path: 'variables.set', type: 'method', detail: '(key: string, value: any) → Promise<void>', info: 'Set a runtime variable. Usage: await vd.variables.set("token", response.body.token)', apply: 'variables.set(' },
+  // ── voiden.variables.* ────────────────────────────────────
+  { path: 'variables.get', type: 'method', detail: '(key: string) → Promise<any>', info: 'Get a runtime variable from .voiden/.process.env.json. Usage: await voiden.variables.get("token")', apply: 'variables.get(key)', boost: 88 },
+  { path: 'variables.set', type: 'method', detail: '(key: string, value: any) → Promise<void>', info: 'Set a runtime variable. Usage: await voiden.variables.set("token", response.body.token)', apply: 'variables.set(key, value)', boost: 87 },
 ];
 
 /**
@@ -75,7 +72,7 @@ function getVdInlineSuggestion(state: EditorState): { from: number; text: string
   }
 
   const beforeCursor = state.sliceDoc(Math.max(0, pos - 120), pos);
-  const match = beforeCursor.match(/\bvd\.([a-zA-Z.]*)$/);
+  const match = beforeCursor.match(/\bvoiden\.([a-zA-Z.]*)$/);
 
   if (!match) {
     return null;

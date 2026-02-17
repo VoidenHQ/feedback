@@ -3,7 +3,7 @@
  *
  * Usage by other plugins:
  *   const scripting = context.helpers.from<ScriptingHelpers>('voiden-scripting');
- *   const result = await scripting.executeScript('vd.log("hello")', requestState);
+ *   const result = await scripting.executeScript('voiden.log("hello")', requestState);
  */
 
 import { executeScript } from './scriptEngine';
@@ -35,7 +35,6 @@ export const scriptingHelpers: ScriptingHelpers = {
     const vdApi: VdApi = {
       request: vdRequest,
       response: vdResponse,
-      env: { get: async () => undefined },
       variables: { get: async () => undefined, set: async () => {} },
       log: () => {},
       cancel: () => {},

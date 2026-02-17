@@ -1,9 +1,15 @@
 /**
- * Python Script Executor
+ * Node.js Script Executor
  *
- * IPC handler that executes Python scripts via subprocess.
- * Receives script body + vd API data as JSON via stdin,
- * returns modified request/response + logs as JSON via stdout.
+ * IPC handler that executes JavaScript scripts via Node.js subprocess
+ * using worker_threads. The worker host wrapper + workerSource are
+ * provided by the renderer scripting engine so main-process execution
+ * stays generic and not tied to a single hardcoded wrapper.
+ *
+ * The outer Node process acts as the RPC host — handling env:get,
+ * variables:get, variables:set messages — exactly as the browser
+ * renderer does for Web Workers. `require()` is available inside
+ * the worker thread so users can import installed npm packages.
  */
 
 import { ipcMain } from "electron";
@@ -12,22 +18,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { getActiveProject } from "../state";
 
-const PYTHON_TIMEOUT_MS = 10_000;
+const NODE_TIMEOUT_MS = 10_000;
 
-let cachedPythonPath: string | null = null;
+let cachedNodePath: string | null = null;
 
 /**
- * Detect available Python binary.
- * Tries python3 first, then python, caches the result.
+ * Detect available Node.js binary.
  */
-async function detectPythonPath(): Promise<string | null> {
-  if (cachedPythonPath) return cachedPythonPath;
-
-  const candidates = process.platform === "win32"
-    ? ["python3", "python"]
-    : ["python3", "python"];
+async function detectNodePath(): Promise<string | null> {
+  if (cachedNodePath) return cachedNodePath;
 
   const whichCmd = process.platform === "win32" ? "where" : "which";
+  const candidates = ["node"];
 
   for (const candidate of candidates) {
     try {
@@ -36,12 +38,12 @@ async function detectPythonPath(): Promise<string | null> {
           if (error || !stdout.trim()) {
             resolve(null);
           } else {
-            resolve(candidate);
+            resolve(stdout.trim().split(/\r?\n/)[0]);
           }
         });
       });
       if (result) {
-        cachedPythonPath = result;
+        cachedNodePath = result;
         return result;
       }
     } catch {
@@ -52,16 +54,17 @@ async function detectPythonPath(): Promise<string | null> {
   return null;
 }
 
-interface PythonScriptPayload {
+interface NodeScriptPayload {
   scriptBody: string;
-  pythonWrapper: string;
+  nodeHostWrapper: string;
+  workerSource: string;
   request: any;
   response?: any;
   envVars: Record<string, string>;
   variables: Record<string, any>;
 }
 
-interface PythonScriptResult {
+interface NodeScriptResult {
   success: boolean;
   logs: Array<{ level: string; args: any[] }>;
   error?: string;
@@ -94,49 +97,49 @@ async function persistProjectVariables(next: Record<string, any>): Promise<void>
     const filePath = path.join(dirPath, ".process.env.json");
     await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf-8");
   } catch {
-    // Best-effort persistence; renderer will still receive result for fallback handling.
+    // Best-effort persistence
   }
 }
 
-export function registerPythonScriptIpcHandler() {
+export function registerNodeScriptIpcHandler() {
   ipcMain.handle(
-    "script:executePython",
-    async (_event, payload: PythonScriptPayload): Promise<PythonScriptResult> => {
-      const pythonPath = await detectPythonPath();
-      if (!pythonPath) {
+    "script:executeNode",
+    async (_event, payload: NodeScriptPayload): Promise<NodeScriptResult> => {
+      const nodePath = await detectNodePath();
+      if (!nodePath) {
         return {
           success: false,
           logs: [],
           error:
-            "Python not found. Install Python 3 or ensure python3/python is in your PATH.",
+            "Node.js not found. Ensure node is in your PATH.",
           cancelled: false,
           exitCode: -1,
         };
       }
 
+      const projectPath = await getActiveProject();
+      const nodeHostWrapper = payload.nodeHostWrapper?.trim();
+      if (!nodeHostWrapper) {
+        return {
+          success: false,
+          logs: [],
+          error: "Node host wrapper source missing from renderer payload.",
+          cancelled: false,
+          exitCode: -1,
+        };
+      }
       const baseVariables = await loadProjectVariables();
-      const mergedPayload: PythonScriptPayload = {
+      const mergedPayload: NodeScriptPayload = {
         ...payload,
         variables: {
           ...baseVariables,
           ...(payload.variables || {}),
         },
       };
-      const projectPath = await getActiveProject();
-      const pythonWrapper = payload.pythonWrapper?.trim();
-      if (!pythonWrapper) {
-        return {
-          success: false,
-          logs: [],
-          error: "Python wrapper source missing from renderer payload.",
-          cancelled: false,
-          exitCode: -1,
-        };
-      }
 
-      return new Promise<PythonScriptResult>((resolve) => {
-        const child = spawn(pythonPath, ["-c", pythonWrapper], {
-          timeout: PYTHON_TIMEOUT_MS,
+      return new Promise<NodeScriptResult>((resolve) => {
+        const child = spawn(nodePath, ["-e", nodeHostWrapper], {
+          timeout: NODE_TIMEOUT_MS,
           stdio: ["pipe", "pipe", "pipe"],
           cwd: projectPath || undefined,
         });
@@ -157,17 +160,16 @@ export function registerPythonScriptIpcHandler() {
             resolve({
               success: false,
               logs: [],
-              error: stderr || `Python exited with code ${code}`,
+              error: stderr || `Node.js exited with code ${code}`,
               cancelled: false,
               exitCode,
             });
             return;
           }
           try {
-            // In case python prints multiple lines, parse the last non-empty line as JSON.
             const lines = stdout.split(/\r?\n/).filter((l) => l.trim().length > 0);
             const jsonLine = lines.length > 0 ? lines[lines.length - 1] : stdout;
-            const result = JSON.parse(jsonLine) as PythonScriptResult;
+            const result = JSON.parse(jsonLine) as NodeScriptResult;
             const normalizedExitCode = result.success === false && exitCode === 0 ? 1 : exitCode;
             result.exitCode = normalizedExitCode;
 
@@ -181,7 +183,7 @@ export function registerPythonScriptIpcHandler() {
             resolve({
               success: false,
               logs: [],
-              error: `Failed to parse Python output: ${stdout.slice(0, 500)}`,
+              error: `Failed to parse Node.js output: ${stdout.slice(0, 500)}`,
               cancelled: false,
               exitCode,
             });
@@ -192,7 +194,7 @@ export function registerPythonScriptIpcHandler() {
           resolve({
             success: false,
             logs: [],
-            error: `Failed to spawn Python: ${err.message}`,
+            error: `Failed to spawn Node.js: ${err.message}`,
             cancelled: false,
             exitCode: -1,
           });

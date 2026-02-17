@@ -1,6 +1,6 @@
 /**
  * Static validation for script bodies.
- * Detects async vd methods called without 'await' before execution.
+ * Detects async voiden/vd methods called without 'await' before execution.
  */
 
 export interface ScriptValidationError {
@@ -11,27 +11,45 @@ export interface ScriptValidationError {
   severity?: 'error' | 'warning' | 'info';
 }
 
-/** vd methods that return Promises and require 'await'. */
+/** voiden/vd methods that return Promises and require 'await'. */
 const ASYNC_VD_METHODS = [
-  'vd.variables.set',
-  'vd.variables.get',
-  'vd.env.get',
+  'voiden.variables.set',
+  'voiden.variables.get',
 ];
 
 /** Supported function calls exposed by the scripting runtime. */
 const SUPPORTED_VD_CALLS = new Set([
-  'vd.variables.set',
-  'vd.variables.get',
-  'vd.env.get',
-  'vd.log',
-  'vd.cancel',
+  'voiden.variables.set',
+  'voiden.variables.get',
+  'voiden.log',
+  'voiden.assert',
+  'voiden.cancel',
 ]);
+
+const SUPPORTED_ASSERT_OPERATORS = new Set([
+  '==', '===', 'eq', 'equal',
+  '!=', '!==', 'neq', 'notequal',
+  'greater', 'greaterthan', 'gte',
+  'less', 'lessthan', 'lte',
+  '>', '>=', '<', '<=',
+  'contains', 'includes',
+  'matches', 'regex',
+  'truthy', 'falsy',
+]);
+
+type VdCallWithArgs = {
+  method: string;
+  column: number;
+  openParenIndex: number;
+  closeParenIndex: number;
+  argsRaw: string;
+};
 
 function isLikelyPlainTextLine(trimmedLine: string, language: 'javascript' | 'python'): boolean {
   if (!trimmedLine) return false;
 
-  const jsKeywords = /^(const|let|var|if|else|for|while|do|return|await|async|function|try|catch|finally|throw|switch|case|break|continue|class|new|import|export|vd)\b/;
-  const pyKeywords = /^(if|elif|else|for|while|return|await|async|def|class|try|except|finally|raise|import|from|pass|break|continue|lambda|with|vd)\b/;
+  const jsKeywords = /^(const|let|var|if|else|for|while|do|return|await|async|function|try|catch|finally|throw|switch|case|break|continue|class|new|import|export|voiden)\b/;
+  const pyKeywords = /^(if|elif|else|for|while|return|await|async|def|class|try|except|finally|raise|import|from|pass|break|continue|lambda|with|voiden)\b/;
   const keywordPattern = language === 'javascript' ? jsKeywords : pyKeywords;
 
   if (keywordPattern.test(trimmedLine)) return false;
@@ -56,19 +74,210 @@ function isLikelyPlainTextLine(trimmedLine: string, language: 'javascript' | 'py
   return /^[A-Za-z]{3,}$/.test(normalized);
 }
 
-function findVdCalls(line: string): Array<{ method: string; column: number }> {
-  const calls: Array<{ method: string; column: number }> = [];
-  const regex = /(^|[^.\w])(vd(?:\.[A-Za-z_$][\w$]*)+)\s*\(/g;
+function findMatchingParen(line: string, openIndex: number): number {
+  let depth = 0;
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = openIndex; i < line.length; i++) {
+    const ch = line[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (inString) {
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inString = ch;
+      continue;
+    }
+    if (ch === '(') depth++;
+    if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function splitTopLevelArgs(argsRaw: string): string[] {
+  const trimmed = argsRaw.trim();
+  if (!trimmed) return [];
+
+  const args: string[] = [];
+  let current = '';
+  let depthParen = 0;
+  let depthBracket = 0;
+  let depthBrace = 0;
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < argsRaw.length; i++) {
+    const ch = argsRaw[i];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      current += ch;
+      escaped = true;
+      continue;
+    }
+    if (inString) {
+      current += ch;
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      current += ch;
+      inString = ch;
+      continue;
+    }
+
+    if (ch === '(') depthParen++;
+    else if (ch === ')') depthParen = Math.max(0, depthParen - 1);
+    else if (ch === '[') depthBracket++;
+    else if (ch === ']') depthBracket = Math.max(0, depthBracket - 1);
+    else if (ch === '{') depthBrace++;
+    else if (ch === '}') depthBrace = Math.max(0, depthBrace - 1);
+
+    if (ch === ',' && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+      args.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current.trim() || argsRaw.endsWith(',')) {
+    args.push(current.trim());
+  }
+
+  return args.filter((a) => a.length > 0);
+}
+
+function findVdCallsWithArgs(line: string): VdCallWithArgs[] {
+  const regex = /(^|[^.\w])((?:voiden)(?:\.[A-Za-z_$][\w$]*)+)\s*\(/g;
+  const calls: VdCallWithArgs[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(line)) !== null) {
     const prefixLen = match[1]?.length ?? 0;
     const method = match[2];
-    const column = match.index + prefixLen + 1;
-    calls.push({ method, column });
+    const methodStart = match.index + prefixLen;
+    const column = methodStart + 1;
+    const openParenIndex = line.indexOf('(', methodStart + method.length);
+    if (openParenIndex === -1) continue;
+    const closeParenIndex = findMatchingParen(line, openParenIndex);
+    if (closeParenIndex === -1) continue;
+    const argsRaw = line.slice(openParenIndex + 1, closeParenIndex);
+    calls.push({ method, column, openParenIndex, closeParenIndex, argsRaw });
   }
 
   return calls;
+}
+
+function lintVdCallArguments(
+  method: string,
+  args: string[],
+  line: number,
+  column: number,
+): ScriptValidationError[] {
+  const errors: ScriptValidationError[] = [];
+  const argCount = args.length;
+
+  if (method === 'voiden.log') {
+    if (argCount < 1) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.log expects at least 1 argument. Use: voiden.log(message) or voiden.log(level, ...args).",
+      });
+    }
+    return errors;
+  }
+
+  if (method === 'voiden.cancel') {
+    if (argCount !== 0) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.cancel does not take any arguments. Use: voiden.cancel().",
+      });
+    }
+    return errors;
+  }
+
+  if (method === 'voiden.variables.get') {
+    if (argCount !== 1) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.variables.get expects 1 argument: key.",
+      });
+    }
+    return errors;
+  }
+
+  if (method === 'voiden.variables.set') {
+    if (argCount !== 2) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.variables.set expects 2 arguments: key, value.",
+      });
+    }
+    return errors;
+  }
+
+  if (method === 'voiden.assert') {
+    if (argCount < 3 || argCount > 4) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.assert expects 3 or 4 arguments: actual, operator, expectedValue, message?.",
+      });
+      return errors;
+    }
+
+    const operatorArg = args[1]?.trim() ?? '';
+    const strMatch = operatorArg.match(/^(['"`])(.*)\1$/);
+    if (strMatch) {
+      const operator = strMatch[2].trim().toLowerCase().replace(/\s+/g, '');
+      if (!SUPPORTED_ASSERT_OPERATORS.has(operator)) {
+        errors.push({
+          line,
+          column,
+          severity: 'warning',
+          method,
+          message: `Unknown assert operator '${strMatch[2]}'. This assertion will fail at runtime.`,
+        });
+      }
+    }
+    return errors;
+  }
+
+  return errors;
 }
 
 /**
@@ -177,7 +386,7 @@ export function validateScript(scriptBody: string): ScriptValidationError[] {
         // Check if 'await' appears before this call in the same line portion
         const before = cleaned.substring(0, methodIdx);
         // Look for 'await' as the last keyword token before the method call
-        // This matches: `await vd.`, `= await vd.`, `(await vd.`, etc.
+        // This matches: `await voiden.`, `= await voiden.`, `(await voiden.`, etc.
         const hasAwait = /\bawait\s+$/.test(before);
 
         if (!hasAwait) {
@@ -193,16 +402,26 @@ export function validateScript(scriptBody: string): ScriptValidationError[] {
       }
     }
 
-    // Detect unknown vd function calls.
-    for (const call of findVdCalls(cleaned)) {
+    // Detect unknown vd function calls + argument lint for supported calls.
+    for (const call of findVdCallsWithArgs(cleaned)) {
       if (!SUPPORTED_VD_CALLS.has(call.method)) {
         errors.push({
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: vd.env.get, vd.variables.get/set, vd.log, vd.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
         });
+        continue;
       }
+
+      errors.push(
+        ...lintVdCallArguments(
+          call.method,
+          splitTopLevelArgs(call.argsRaw),
+          i + 1,
+          call.column,
+        ),
+      );
     }
   }
 
@@ -328,16 +547,26 @@ export function validatePythonScript(scriptBody: string): ScriptValidationError[
       }
     }
 
-    // Detect unknown vd function calls.
-    for (const call of findVdCalls(cleaned)) {
+    // Detect unknown vd function calls + argument lint for supported calls.
+    for (const call of findVdCallsWithArgs(cleaned)) {
       if (!SUPPORTED_VD_CALLS.has(call.method)) {
         errors.push({
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: vd.env.get, vd.variables.get/set, vd.log, vd.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
         });
+        continue;
       }
+
+      errors.push(
+        ...lintVdCallArguments(
+          call.method,
+          splitTopLevelArgs(call.argsRaw),
+          i + 1,
+          call.column,
+        ),
+      );
     }
   }
 

@@ -8,7 +8,7 @@
  */
 
 import { executeScript } from './scriptEngine';
-import { buildVdRequest, buildVdResponse, applyVdRequestToState, applyVdResponseToState, buildEnvApi, buildVariablesApi } from './vdApi';
+import { buildVdRequest, buildVdResponse, applyVdRequestToState, applyVdResponseToState, buildVariablesApi } from './vdApi';
 import { validatePythonScript, validateScript } from './validateScript';
 import { scriptLogStore } from './logStore';
 import type { VdApi, ScriptLanguage } from './types';
@@ -159,13 +159,11 @@ export async function preSendScriptHook(context: any): Promise<void> {
   }
 
   const vdRequest = buildVdRequest(requestState);
-  const envApi = buildEnvApi();
   const variablesApi = buildVariablesApi();
 
   const vdApi: VdApi = {
     request: vdRequest,
     response: undefined,
-    env: envApi,
     variables: variablesApi,
     log: () => {},
     cancel: () => {},
@@ -186,8 +184,20 @@ export async function preSendScriptHook(context: any): Promise<void> {
     : undefined;
   if (preError) requestState.metadata.preScriptError = preError;
 
+  // Store assertion results
+  if (result.assertions && result.assertions.length > 0) {
+    const total = result.assertions.length;
+    const passed = result.assertions.filter(a => a.passed).length;
+    requestState.metadata.preScriptAssertions = {
+      results: result.assertions,
+      totalAssertions: total,
+      passedAssertions: passed,
+      failedAssertions: total - passed,
+    };
+  }
+
   // Push to sidebar log store
-  scriptLogStore.push('pre', result.logs, preError);
+  scriptLogStore.push('pre', result.logs, preError, result.exitCode);
 
   // Handle cancellation
   if (result.cancelled) {
@@ -203,6 +213,13 @@ export async function preSendScriptHook(context: any): Promise<void> {
 export async function postProcessScriptHook(context: any): Promise<void> {
   const { requestState, responseState } = context;
   const doc = cachedEditorDocument;
+
+  // Always carry pre-script assertions into response metadata, even when no post script runs.
+  if (!responseState.metadata) responseState.metadata = {};
+  if (!responseState.metadata.scriptAssertionResults && requestState?.metadata?.preScriptAssertions) {
+    responseState.metadata.scriptAssertionResults = requestState.metadata.preScriptAssertions;
+  }
+
   if (!doc) return;
 
   const scriptInfo = extractScriptFromDoc(doc, 'post_script');
@@ -221,7 +238,6 @@ export async function postProcessScriptHook(context: any): Promise<void> {
       : validateScript(scriptBody);
     const blockingErrors = errors.filter((e) => (e.severity || 'error') === 'error');
     if (blockingErrors.length > 0) {
-      if (!responseState.metadata) responseState.metadata = {};
       const msg = blockingErrors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
       responseState.metadata.postScriptError = `Script validation failed:\n${msg}`;
       return;
@@ -230,13 +246,11 @@ export async function postProcessScriptHook(context: any): Promise<void> {
 
   const vdRequest = buildVdRequest(requestState);
   const vdResponse = buildVdResponse(responseState);
-  const envApi = buildEnvApi();
   const variablesApi = buildVariablesApi();
 
   const vdApi: VdApi = {
     request: vdRequest,
     response: vdResponse,
-    env: envApi,
     variables: variablesApi,
     log: () => {},
     cancel: () => {},
@@ -250,15 +264,31 @@ export async function postProcessScriptHook(context: any): Promise<void> {
   }
 
   // Store logs and errors in response metadata
-  if (!responseState.metadata) responseState.metadata = {};
   responseState.metadata.postScriptLogs = result.logs;
   const postError = (result.error || result.success === false)
     ? String(result.error || 'Script execution failed')
     : undefined;
   if (postError) responseState.metadata.postScriptError = postError;
 
+  // Store assertion results (merge pre + post)
+  if (result.assertions && result.assertions.length > 0) {
+    const preAssertions = requestState?.metadata?.preScriptAssertions;
+    const allResults = [
+      ...(preAssertions?.results || []),
+      ...result.assertions,
+    ];
+    const total = allResults.length;
+    const passed = allResults.filter((a: any) => a.passed).length;
+    responseState.metadata.scriptAssertionResults = {
+      results: allResults,
+      totalAssertions: total,
+      passedAssertions: passed,
+      failedAssertions: total - passed,
+    };
+  }
+
   // Push to sidebar log store
-  scriptLogStore.push('post', result.logs, postError);
+  scriptLogStore.push('post', result.logs, postError, result.exitCode);
 
   // Clear cached document after post-processing
   cachedEditorDocument = null;

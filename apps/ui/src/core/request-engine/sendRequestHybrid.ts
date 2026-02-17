@@ -15,7 +15,7 @@ import { preSendProcessHook, replaceProcessVariablesInText, saveRuntimeVariables
 import { get } from "http";
 import { getRuntimeVariablesMap } from "./getRequestFromJson";
 import { expandLinkedBlocksInDoc } from "../editors/voiden/utils/expandLinkedBlocks";
-import { toast } from "@/core/components/ui/sonner";
+
 
 /**
  * Get headers with auth merged
@@ -323,15 +323,6 @@ export async function sendRequestHybrid(
       metadata,
     });
 
-    const preScriptError = requestState?.metadata?.preScriptError;
-    if (preScriptError) {
-      toast.error("Pre-request script error", {
-        description: String(preScriptError),
-        duration: 6000,
-        closeButton: true,
-      });
-    }
-
     if (requestState?.metadata?.scriptCancelled) {
       const reason = requestState?.metadata?.preScriptError;
       throw new Error(reason ? `Request cancelled by pre-request script: ${reason}` : "Request cancelled by pre-request script");
@@ -495,14 +486,6 @@ export async function sendRequestHybrid(
       await saveRuntimeVariables(requestState, responseState, captureArray, path);
     }
 
-    const postScriptError = responseState?.metadata?.postScriptError;
-    if (postScriptError) {
-      toast.error("Post-request script error", {
-        description: String(postScriptError),
-        duration: 6000,
-        closeButton: true,
-      });
-    }
     // Build final response
     return buildBaseResponseFromPipeline(responseState, request.preRequestResult);
   } catch (error) {

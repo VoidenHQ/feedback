@@ -6,7 +6,7 @@
   "author": "Voiden Team",
   "enabled": true,
   "priority": 25,
-  "readme": "Add JavaScript pre-request and post-response scripts to your API requests. Use the vd API to read/write request data, access environment variables, and control request flow. Insert with /pre-script and /post-script slash commands.",
+  "readme": "Add JavaScript pre-request and post-response scripts to your API requests. Use the vd API to read/write request data, work with runtime variables, and control request flow. Insert with /pre-script and /post-script slash commands.",
   "capabilities": {
     "blocks": {
       "owns": ["pre_script", "post_script"],
@@ -41,12 +41,12 @@
   "features": [
     "Pre-request JavaScript scripts (runs before request is sent)",
     "Post-response JavaScript scripts (runs after response is received)",
-    "vd.request API for reading/writing request data",
-    "vd.response API for reading response data",
-    "vd.env.get/set for environment variable access",
-    "vd.variables.get/set for Voiden runtime variable access",
-    "vd.log() for script output logging",
-    "vd.cancel() to cancel request from pre-script",
+    "voiden.request API for reading/writing request data",
+    "voiden.response API for reading response data",
+    "voiden.variables.get/set for Voiden runtime variable access",
+    "voiden.log() for script output logging",
+    "voiden.assert(condition, message) for script-based assertions",
+    "voiden.cancel() to cancel request from pre-script",
     "CodeMirror JavaScript editor with syntax highlighting"
   ]
 }

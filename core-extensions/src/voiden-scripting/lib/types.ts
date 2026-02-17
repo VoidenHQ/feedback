@@ -22,10 +22,6 @@ export interface VdResponse {
   size: number;
 }
 
-export interface VdEnv {
-  get: (key: string) => Promise<string | undefined>;
-}
-
 export interface VdVariables {
   get: (key: string) => Promise<any>;
   set: (key: string, value: any) => Promise<void>;
@@ -34,14 +30,24 @@ export interface VdVariables {
 export interface VdApi {
   request: VdRequest;
   response?: VdResponse;
-  env: VdEnv;
   variables: VdVariables;
-  log: (...args: any[]) => void;
+  log: (levelOrMessage: any, ...args: any[]) => void;
+  assert?: (actual: any, operator: string, expectedValue: any, message?: string) => void;
   cancel: () => void;
 }
 
+export interface ScriptAssertionResult {
+  passed: boolean;
+  message: string;
+  condition?: string;
+  actualValue?: any;
+  operator?: string;
+  expectedValue?: any;
+  reason?: string;
+}
+
 export interface ScriptLog {
-  level: string;
+  level: 'info' | 'warn' | 'error' | 'log' | 'debug' | string;
   args: any[];
 }
 
@@ -50,6 +56,8 @@ export interface ScriptExecutionResult {
   logs: ScriptLog[];
   error?: string;
   cancelled: boolean;
+  exitCode?: number;
+  assertions?: ScriptAssertionResult[];
   modifiedRequest?: VdRequest;
   modifiedResponse?: VdResponse;
 }

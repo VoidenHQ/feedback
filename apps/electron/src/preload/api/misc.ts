@@ -139,6 +139,7 @@ export const requestApi = {
 
 export const scriptApi = {
   executePython: (payload: any) => ipcRenderer.invoke("script:executePython", payload),
+  executeNode: (payload: any) => ipcRenderer.invoke("script:executeNode", payload),
 };
 
 export const fileLinkApi = {

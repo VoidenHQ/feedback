@@ -1,5 +1,5 @@
 /**
- * Builds the `vd` API object from pipeline state and applies mutations back.
+ * Builds the `voiden` API object from pipeline state and applies mutations back.
  */
 
 import type { VdRequest, VdResponse } from './types';
@@ -97,26 +97,7 @@ export function applyVdResponseToState(vdResponse: VdResponse, responseState: an
 }
 
 /**
- * Build vd.env API using Electron's secure environment APIs.
- * env.get() resolves a single variable via Electron main process.
- * Environment variables are read-only — use vd.variables for runtime storage.
- */
-export function buildEnvApi(): { get: (key: string) => Promise<string | undefined> } {
-  return {
-    get: async (key: string): Promise<string | undefined> => {
-      try {
-        const result = await (window as any).electron?.env?.replaceVariables(`{{${key}}}`);
-        if (result === `{{${key}}}`) return undefined;
-        return result;
-      } catch {
-        return undefined;
-      }
-    },
-  };
-}
-
-/**
- * Build vd.variables API using .voiden/.process.env.json.
+ * Build voiden.variables API using .voiden/.process.env.json.
  */
 export function buildVariablesApi(): { get: (key: string) => Promise<any>; set: (key: string, value: any) => Promise<void> } {
   return {

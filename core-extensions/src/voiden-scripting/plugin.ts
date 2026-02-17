@@ -13,8 +13,8 @@ import {
 } from './lib/pipelineHooks';
 import { tr } from '@faker-js/faker';
 
-const PRE_SCRIPT_DEFAULT = '// Pre-request script\n// Use vd.request, vd.env, vd.variables, vd.log, vd.cancel\n';
-const POST_SCRIPT_DEFAULT = '// Post-response script\n// Use vd.request, vd.response, vd.env, vd.variables, vd.log\n';
+const PRE_SCRIPT_DEFAULT = '// Pre-request script\n// Use voiden.request, voiden.variables, voiden.log, voiden.cancel\n';
+const POST_SCRIPT_DEFAULT = '// Post-response script\n// Use voiden.request, voiden.response, voiden.variables, voiden.log\n';
 
 export default function createVoidenScriptingPlugin(context: any) {
   const extendedContext = {
@@ -71,7 +71,12 @@ export default function createVoidenScriptingPlugin(context: any) {
       context.registerVoidenExtension(PreScriptNode);
       context.registerVoidenExtension(PostScriptNode);
 
-      // 2b. Register CodeMirror autocompletion for vd.* API
+      // 2a. Register script assertion results node for response panel
+      const { createScriptAssertionResultsNode } = await import('./nodes/ScriptAssertionResultsNode');
+      const ScriptAssertionResultsNode = createScriptAssertionResultsNode(NodeViewWrapper);
+      context.registerVoidenExtension(ScriptAssertionResultsNode);
+
+      // 2b. Register CodeMirror autocompletion for voiden.* API
       const { vdAutocomplete } = await import('./lib/vdAutocomplete');
       context.registerCodemirrorExtension(vdAutocomplete());
 

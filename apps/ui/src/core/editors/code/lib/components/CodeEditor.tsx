@@ -89,6 +89,27 @@ export interface ScriptDiagnostic {
 }
 
 const lintTooltipTheme = EditorView.theme({
+  ".cm-gutter.cm-gutter-lint": {
+    backgroundColor: "var(--editor-bg)",
+    borderLeft: "1px solid var(--border)",
+    minWidth: "20px",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-gutterElement": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--comment)",
+    opacity: "0.95",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-error": {
+    color: "#ef4444",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-warning": {
+    color: "#f59e0b",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-info": {
+    color: "#3b82f6",
+  },
   ".cm-tooltip.cm-tooltip-lint": {
     maxWidth: "min(200px, calc(50vw - 10vh))",
     border: "1px solid var(--border)",

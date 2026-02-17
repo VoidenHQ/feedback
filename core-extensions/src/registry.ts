@@ -400,12 +400,12 @@ export const coreExtensions: ExtensionMetadata[] = [
     "features": [
       "Pre-request JavaScript scripts (runs before request is sent)",
       "Post-response JavaScript scripts (runs after response is received)",
-      "vd.request API for reading/writing request data",
-      "vd.response API for reading response data",
-      "vd.env.get for environment variable access",
-      "vd.variables.get/set for Voiden runtime variable access",
-      "vd.log() for script output logging",
-      "vd.cancel() to cancel request from pre-script",
+      "voiden.request API for reading/writing request data",
+      "voiden.response API for reading response data",
+      "voiden.env.get for environment variable access",
+      "voiden.variables.get/set for Voiden runtime variable access",
+      "voiden.log() for script output logging",
+      "voiden.cancel() to cancel request from pre-script",
       "CodeMirror JavaScript editor with syntax highlighting"
     ],
     "type": "core"
