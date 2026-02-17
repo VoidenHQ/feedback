@@ -3,7 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import Suggestion from '@tiptap/suggestion';
 import { ReactRenderer } from '@tiptap/react';
 import tippy, { Instance, Props } from 'tippy.js';
-import { FAKER_FUNCTIONS } from './fakerEngine';
+import { FAKER_FUNCTIONS, getFakerInsertText } from './fakerEngine';
 import { FakerSuggestionList } from './FakerSuggestionList';
 
 export const FakerSuggestionPluginKey = new PluginKey('fakerSuggestion');
@@ -22,8 +22,7 @@ export const FakerSuggestion = Extension.create({
         pluginKey: FakerSuggestionPluginKey,
 
         command: ({ editor, range, props }: any) => {
-          // Insert the selected faker function
-          const fakerText = `{{$faker.${props.path}()}}`;
+          const fakerText = getFakerInsertText(props.path, Boolean(props.withArgsTemplate));
 
           editor
             .chain()
@@ -45,8 +44,7 @@ export const FakerSuggestion = Extension.create({
         items: ({ query }: { query: string }) => {
           // Filter faker functions based on what user has typed
           return FAKER_FUNCTIONS
-            .filter(fn => fn.path.toLowerCase().includes(query.toLowerCase()))
-            .slice(0, 10);
+            .filter(fn => fn.path.toLowerCase().includes(query.toLowerCase()));
         },
 
         render: () => {
@@ -72,7 +70,6 @@ export const FakerSuggestion = Extension.create({
                 interactive: true,
                 trigger: 'manual',
                 placement: 'bottom-start',
-                theme: 'faker-suggestion',
                 maxWidth: 400,
               });
             },

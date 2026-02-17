@@ -22,6 +22,8 @@ import {
   ArrowBigDown,
   Info,
   ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   File,
   Folder,
   FolderOpen,
@@ -150,6 +152,23 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
   const queryClient = useQueryClient();
   const setIsRenaming = useFocusStore((state) => state.setIsRenaming);
   const { mutate: activateTab } = useActivateTab();
+
+  const isInternalTreeDrag = (e: React.DragEvent) => e.dataTransfer.types.includes("application/x-arborist-node");
+  const isExternalFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes("Files") && !isInternalTreeDrag(e);
+  const isKnownFileSystemDrag = (e: React.DragEvent) => isInternalTreeDrag(e) || isExternalFileDrag(e);
+  const isInternalDropTargetFolder = node.data.type === "folder" && Boolean(node.willReceiveDrop);
+
+  useEffect(() => {
+    if (!isInternalDropTargetFolder) return;
+    setIsDragOver(true);
+    setDragOverParentId(null);
+    if (!node.isOpen && !dragOverTimer) {
+      const timer = setTimeout(() => {
+        node.open();
+      }, 200);
+      setDragOverTimer(timer);
+    }
+  }, [isInternalDropTargetFolder, node, dragOverTimer, setDragOverParentId]);
 
 
   // Cleanup timer on unmount
@@ -370,15 +389,19 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
 
   // Handle file drop from external sources (Finder, File Explorer, etc.)
   const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
     setIsDragOver(false);
     setDragOverParentId(null);
-    // Clear auto-expand timer
     if (dragOverTimer) {
       clearTimeout(dragOverTimer);
       setDragOverTimer(null);
     }
+
+    if (!isExternalFileDrag(e)) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
 
     const files = Array.from(e.dataTransfer.files);
 
@@ -408,55 +431,76 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
   };
   const isSiblingHighlight = dragOverParentId === node.parent?.id;
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    if (!isKnownFileSystemDrag(e)) {
+      return;
+    }
 
-    const hasFiles = e.dataTransfer.types.includes("Files");
-    const isInternalDrag = e.dataTransfer.types.includes("application/x-arborist-node");
-
-    if (hasFiles && !isInternalDrag) {
-      setIsDragOver(true);
-
-      // Determine the parent to highlight siblings
-      let parentId = null;
-      if (node.data.type === "folder") {
-        // If dragging over a folder, highlight its children (when opened)
-        parentId = node.id;
-      } else if (node.parent) {
-        // If dragging over a file, highlight siblings (same parent)
-        parentId = node.parent.id;
+    if (isInternalTreeDrag(e)) {
+      if (node.data.type !== "folder") {
+        return;
       }
 
-      setDragOverParentId(parentId);
+      setIsDragOver(true);
+      setDragOverParentId(null);
 
-      // Auto-expand logic
-      if (node.data.type === "folder" && !node.isOpen && !dragOverTimer) {
-
+      if (!node.isOpen && !dragOverTimer) {
         const timer = setTimeout(() => {
           node.open();
         }, 200);
         setDragOverTimer(timer);
-      } else if (node.data.type === "folder") {
-        const closeAllDescendants = (parentNode: typeof node) => {
-          if (!parentNode.children) return;
-
-          parentNode.children.forEach((child) => {
-            if (child.data.type === "folder" && child.isOpen) {
-              child.close();
-              // Recursively close nested folders
-              closeAllDescendants(child);
-            }
-          });
-        };
-
-        closeAllDescendants(node);
       }
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    setIsDragOver(true);
+
+    // Determine the parent to highlight siblings
+    let parentId = null;
+    if (node.data.type === "folder") {
+      // If dragging over a folder, highlight its children (when opened)
+      parentId = node.id;
+    } else if (node.parent) {
+      // If dragging over a file, highlight siblings (same parent)
+      parentId = node.parent.id;
+    }
+
+    setDragOverParentId(parentId);
+
+    // Auto-expand logic
+    if (node.data.type === "folder" && !node.isOpen && !dragOverTimer) {
+      const timer = setTimeout(() => {
+        node.open();
+      }, 200);
+      setDragOverTimer(timer);
+    } else if (node.data.type === "folder") {
+      const closeAllDescendants = (parentNode: typeof node) => {
+        if (!parentNode.children) return;
+
+        parentNode.children.forEach((child) => {
+          if (child.data.type === "folder" && child.isOpen) {
+            child.close();
+            // Recursively close nested folders
+            closeAllDescendants(child);
+          }
+        });
+      };
+
+      closeAllDescendants(node);
     }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    if (!isKnownFileSystemDrag(e)) {
+      return;
+    }
+
+    if (isExternalFileDrag(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
     // Only clear if we're actually leaving the node
     const rect = e.currentTarget.getBoundingClientRect();
@@ -556,7 +600,37 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
         path: node.data.path,
         type: node.data.type,
         name: node.data.name,
+        isProjectRoot: node.level === 0,
       });
+    }
+  };
+
+  const expandAllFromFolder = (folderNode: NodeApi<ExtendedFileTree>) => {
+    const openDescendants = (currentNode: NodeApi<ExtendedFileTree>) => {
+      if (currentNode.data.type === "folder" && !currentNode.isOpen) {
+        currentNode.open();
+      }
+      currentNode.children?.forEach(openDescendants);
+    };
+
+    openDescendants(folderNode);
+  };
+
+  const collapseAllFromFolder = (folderNode: NodeApi<ExtendedFileTree>) => {
+    const closeDescendants = (currentNode: NodeApi<ExtendedFileTree>) => {
+      currentNode.children?.forEach((child) => {
+        if (child.data.type === "folder") {
+          closeDescendants(child);
+          if (child.isOpen) {
+            child.close();
+          }
+        }
+      });
+    };
+
+    closeDescendants(folderNode);
+    if (folderNode.isOpen) {
+      folderNode.close();
     }
   };
 
@@ -565,13 +639,13 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
       style={style}
       ref={dragHandle}
       className={cn(
-        "h-6 transition-colors",
-        !isDragOver && 'hover:bg-active',
+        "group h-6 transition-colors",
+        !isDragOver && 'hover:bg-hover',
         (activeFile?.source === node.data.path || node.isSelected) && !isDragOver && "bg-active",
         node.isFocused && !isDragOver && "bg-active ring-0",
-        isDragOver && 'bg-accent/30 border-l-2 border-accent',
+        (isDragOver || isInternalDropTargetFolder) && 'bg-accent/30 border-l-2 border-accent',
         // Highlight all siblings when any sibling is being dragged over
-        isSiblingHighlight && !isDragOver && "bg-accent/30 border-l-2 border-accent"
+        isSiblingHighlight && !isDragOver && !isInternalDropTargetFolder && "bg-accent/30 border-l-2 border-accent"
       )}
       onClick={handleSelect}
       onContextMenu={handleContextMenu}
@@ -584,8 +658,8 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
           <div key={i} className="absolute w-px bg-active h-6" style={{ left: `${(i + 1) * 12 + 3}px` }} />
         ))}
       </div>
-      <div className="pl-2 relative flex items-center gap-2">
-        <div className="flex items-center">
+      <div className="pl-2 relative flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           {node.data.type === "folder" && (
             <>
               <ChevronRight size={14} className={`transition-transform ${node.isOpen ? "rotate-90" : ""}`} />
@@ -594,8 +668,7 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
             </>
           )}
           {node.data.type !== "folder" && getFileIcon(node.data.name, node.data.path)}
-        </div>
-        {node.isEditing ? (
+          {node.isEditing ? (
           <RenameInput node={node} error={error} setError={setError} onSubmit={onSubmit} setIsRenaming={setIsRenaming} />
         ) : (
           <span
@@ -618,6 +691,63 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
             {node.data.name}
           </span>
         )}
+        </div>
+        {
+          node.data.type === "folder" && (
+            <div className="flex items-center px-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      collapseAllFromFolder(node);
+                    }}
+                    className="p-0.5 rounded hover:bg-hover ml-1"
+                    title="Collapse all inside this folder"
+                  >
+                    <ChevronsUp size={12} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content
+                  align="end"
+                  sideOffset={4}
+                  alignOffset={4}
+                  side="bottom"
+                  avoidCollisions
+                  collisionPadding={8}
+                  className="border text-comment bg-panel border-border p-1 text-sm z-10"
+                >
+                  Collapse all
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      expandAllFromFolder(node);
+                    }}
+                    className="p-0.5 rounded hover:bg-hover"
+                    title="Expand all inside this folder"
+                  >
+                    <ChevronsDown size={12} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content
+                  align="end"
+                  sideOffset={4}
+                  alignOffset={4}
+                  side="bottom"
+                  avoidCollisions
+                  collisionPadding={8}
+                  className="border text-comment bg-panel border-border p-1 text-sm z-10"
+                >
+                  Expand all
+                </Tooltip.Content>
+              </Tooltip.Root>
+            </div>
+          )
+        }
       </div>
     </div>
   );
@@ -989,13 +1119,13 @@ export const FileSystemList = () => {
       <div className="flex flex-col h-full w-full px-4 py-2 gap-4">
         <div className="text-sm text-text flex flex-col gap-2 mt-4 ">
           Create a new Voiden project to get started.
-          <button style={{maxWidth:'200px'}} className="bg-button-primary hover:bg-button-primary-hover rounded transition px-2 py-1" onClick={() => setIsNewProjectMode(true)}>
+          <button style={{ maxWidth: '200px' }} className="bg-button-primary hover:bg-button-primary-hover rounded transition px-2 py-1" onClick={() => setIsNewProjectMode(true)}>
             New Voiden project
           </button>
         </div>
         <div className="text-sm text-text flex flex-col gap-2 mt-4">
           Or open an existing project.
-          <button style={{maxWidth:'200px'}} className="bg-button-primary hover:bg-button-primary-hover transition px-2 py-1" onClick={() => openProject("~/")}>
+          <button style={{ maxWidth: '200px' }} className="bg-button-primary hover:bg-button-primary-hover transition px-2 py-1" onClick={() => openProject("~/")}>
             Open a project
           </button>
         </div>
@@ -1015,6 +1145,7 @@ export const FileSystemList = () => {
             path: data.path,
             type: data.type,
             name: data.name,
+            isProjectRoot: true,
           });
         }
       }}
@@ -1186,6 +1317,7 @@ export const FileSystemList = () => {
                   path: data.path,
                   type: data.type,
                   name: data.name,
+                  isProjectRoot: true,
                 });
               }
             }}

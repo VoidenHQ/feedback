@@ -45,13 +45,24 @@ async function resolveLinkedBlock(
 
   // Fallback: fetch from disk
   try {
-    const markdown = await window.electron?.voiden.getBlockContent(blockUid);
+    let sourcePath = originalFile;
+    const projects = queryClient.getQueryData<{
+      projects: { path: string; name: string }[];
+      activeProject: string;
+    }>(["projects"]);
+    const activeProject = projects?.activeProject;
+
+    if (activeProject) {
+      sourcePath = (await window.electron?.utils.pathJoin(activeProject, originalFile)) ?? originalFile;
+    }
+
+    const markdown = await window.electron?.voiden.getBlockContent(sourcePath);
     if (!markdown) {
       throw new Error(`No markdown returned for block uid: ${blockUid}`);
     }
 
-    const parsedNodes = parseMarkdown(markdown, schema);
-    const referencedBlock = findBlockByUid(parsedNodes, blockUid);
+    const parsedDoc = parseMarkdown(markdown, schema);
+    const referencedBlock = findBlockByUid(parsedDoc?.content ?? [], blockUid);
 
     if (!referencedBlock) {
       throw new Error(`Block with uid ${blockUid} not found`);

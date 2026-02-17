@@ -2,7 +2,7 @@
   "id": "voiden-rest-api",
   "name": "Voiden REST API",
   "description": "HTTP/REST API testing toolkit with extensible request pipeline, custom blocks for headers/body, environment variables, response visualization, and support for all HTTP methods including multipart file uploads",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Voiden Team",
   "enabled": true,
   "priority": 10,
@@ -21,12 +21,13 @@
         "multipart-table",
         "json_body",
         "xml_body",
+        "yml_body",
         "response-status",
         "response-headers",
         "response-body"
       ],
       "allowExtensions": true,
-      "description": "Owns 13 block types for HTTP request/response building and visualization"
+      "description": "Owns 14 block types for HTTP request/response building and visualization"
     },
 
     "paste": {

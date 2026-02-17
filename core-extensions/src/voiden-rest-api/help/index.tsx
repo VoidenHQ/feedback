@@ -304,6 +304,68 @@ export const HttpJsonBodyHelp = () => (
   </div>
 );
 
+export const HttpYmlBodyHelp = () => (
+  <div className="space-y-4">
+    <section>
+      <h3 className="font-semibold mb-2 text-text">YAML Request Body</h3>
+      <p className="text-sm text-comment mb-3">
+        YAML (YAML Ain't Markup Language) is a human-friendly data serialization format
+        commonly used for configuration files and data exchange between languages.
+      </p>
+    </section>
+
+    <section>
+      <h4 className="font-semibold mb-2 text-text">How It Works</h4>
+      <p className="text-sm text-comment mb-2">
+        YAML data is sent in the request body with Content-Type: application/x-yaml or text/yaml
+      </p>
+      <pre className="bg-accent/10 p-2 rounded text-xs overflow-x-auto text-text">
+{`name: John Doe
+email: john@example.com
+age: 30
+active: true
+roles:
+  - admin
+  - user`}
+      </pre>
+    </section>
+
+    <section>
+      <h4 className="font-semibold mb-2 text-text">How to Use</h4>
+      <ol className="list-decimal list-inside space-y-1 text-sm text-comment">
+        <li>Write valid YAML in the editor</li>
+        <li>Use indentation (spaces) for nesting</li>
+        <li>Use variables with <code className="bg-accent/10 px-1 rounded text-text">{`{{variable_name}}`}</code> syntax</li>
+        <li>Variables work in both keys and values</li>
+        <li>Content-Type header is set automatically</li>
+      </ol>
+    </section>
+
+    <section>
+      <h4 className="font-semibold mb-2 text-text">Common Use Cases</h4>
+      <ul className="list-disc list-inside space-y-1 text-sm text-comment">
+        <li>Kubernetes and Docker APIs</li>
+        <li>Configuration management APIs</li>
+        <li>CI/CD pipeline APIs</li>
+        <li>APIs that accept YAML payloads</li>
+      </ul>
+    </section>
+
+    <section>
+      <h4 className="font-semibold mb-2 text-text">Example with Variables</h4>
+      <pre className="bg-accent/10 p-2 rounded text-xs overflow-x-auto text-text">
+{`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{config_name}}"
+  namespace: "{{namespace}}"
+data:
+  key: "{{config_value}}"`}
+      </pre>
+    </section>
+  </div>
+);
+
 export const HttpXmlBodyHelp = () => (
   <div className="space-y-4">
     <section>

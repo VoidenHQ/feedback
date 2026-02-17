@@ -49,6 +49,7 @@ module.exports = {
         editor: "var(--editor-bg)",
         panel: "var(--ui-panel-bg)",
         active: "var(--ui-selection-normal)",
+        hover: "var(--ui-hover)",
         comment: "var(--syntax-comment)",
         accent: "rgb(var(--common-accent))",
         alt: "rgb(var(--common-alt))",

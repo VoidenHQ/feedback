@@ -19,6 +19,7 @@ export const REQUEST_NODES = [
   "multipart-table",
   "json_body",
   "xml_body",
+  "yml_body",
   "pre_request_block",
   "post_request_block",
   "documentation",
@@ -174,6 +175,20 @@ export const convertToJsonNode = (text: string, contentType: string) => {
 export const convertToXMLNode = (text: string, contentType: string) => {
   return {
     type: "xml_body",
+    attrs: {
+      importedFrom: "",
+      body: text,
+      contentType,
+    },
+  };
+};
+
+/**
+ * Create YAML body node
+ */
+export const convertToYmlNode = (text: string, contentType: string) => {
+  return {
+    type: "yml_body",
     attrs: {
       importedFrom: "",
       body: text,
