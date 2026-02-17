@@ -168,6 +168,7 @@ export async function preSendScriptHook(context: any): Promise<void> {
   }
 
   const vdRequest = buildVdRequest(requestState);
+  const vdRequestBeforeScript = JSON.parse(JSON.stringify(vdRequest));
   const variablesApi = buildVariablesApi();
   const envApi = buildEnvApi();
 
@@ -183,7 +184,11 @@ export async function preSendScriptHook(context: any): Promise<void> {
   const result = await executeScript(scriptBody, vdApi, language);
 
   // Apply request modifications back to pipeline state
-  if (result.success && result.modifiedRequest) {
+  if (
+    result.success &&
+    result.modifiedRequest &&
+    didScriptChangePayload(vdRequestBeforeScript, result.modifiedRequest)
+  ) {
     applyVdRequestToState(result.modifiedRequest, requestState);
   }
 

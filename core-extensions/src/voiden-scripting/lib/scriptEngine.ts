@@ -54,40 +54,6 @@ const workerSource = `
     self.postMessage({ type: 'log', args });
   }
 
-  function _toCollectionArray(input) {
-    if (Array.isArray(input)) {
-      return input
-        .filter((item) => item && typeof item === 'object')
-        .map((item) => ({
-          key: String(item.key ?? '').trim(),
-          value: String(item.value ?? ''),
-          enabled: item.enabled !== false,
-        }))
-        .filter((item) => item.key);
-    }
-
-    if (input && typeof input === 'object') {
-      if (Object.prototype.hasOwnProperty.call(input, 'key') && Object.prototype.hasOwnProperty.call(input, 'value')) {
-        const key = String(input.key ?? '').trim();
-        if (!key) return [];
-        return [{ key, value: String(input.value ?? ''), enabled: input.enabled !== false }];
-      }
-      return Object.entries(input)
-        .map(([key, value]) => ({ key: String(key ?? '').trim(), value: String(value ?? ''), enabled: true }))
-        .filter((item) => item.key);
-    }
-
-    return [];
-  }
-
-  function _normalizeRequestCollections(req) {
-    if (!req || typeof req !== 'object') return req;
-    req.headers = _toCollectionArray(req.headers);
-    req.queryParams = _toCollectionArray(req.queryParams);
-    req.pathParams = _toCollectionArray(req.pathParams);
-    return req;
-  }
-
   function _serializeAssertionValue(val) {
     try {
       return JSON.parse(JSON.stringify(val));
@@ -178,7 +144,6 @@ const workerSource = `
     if (data?.type === 'start') {
       requestState = data.request;
       responseState = data.response;
-      _normalizeRequestCollections(requestState);
       const scriptBody = data.script;
 
       const voiden = {
@@ -463,13 +428,17 @@ def main():
     _REQUEST_COLLECTION_FIELDS = {"headers", "queryParams", "pathParams"}
 
     class _Obj:
-        def __init__(self, data):
+        def __init__(self, data, normalize_collections=False):
+            object.__setattr__(self, '_normalize_collections', normalize_collections)
             for k, v in data.items():
                 setattr(self, k, v)
 
         def __setattr__(self, key, value):
+            if key == '_normalize_collections':
+                object.__setattr__(self, key, value)
+                return
             # Keep request collections list-like in Python so .push()/.append() work.
-            if key in _REQUEST_COLLECTION_FIELDS:
+            if object.__getattribute__(self, '_normalize_collections') and key in _REQUEST_COLLECTION_FIELDS:
                 normalized = _normalize_kv_collection(value)
                 object.__setattr__(self, key, _List(normalized))
                 return
@@ -485,7 +454,7 @@ def main():
             return getattr(self, key, default)
 
         def items(self):
-            return self.__dict__.items()
+            return ((k, v) for k, v in self.__dict__.items() if k != '_normalize_collections')
 
     def _normalize_kv_collection(value):
         items = []
@@ -527,11 +496,6 @@ def main():
 
         return []
 
-    if isinstance(request_data, dict):
-        request_data["headers"] = _normalize_kv_collection(request_data.get("headers"))
-        request_data["queryParams"] = _normalize_kv_collection(request_data.get("queryParams"))
-        request_data["pathParams"] = _normalize_kv_collection(request_data.get("pathParams"))
-
     class _Variables:
         def get(self, key):
             return variables_data.get(key)
@@ -546,7 +510,7 @@ def main():
 
     class _Vd:
         def __init__(self):
-            self.request = _Obj(request_data)
+            self.request = _Obj(request_data, normalize_collections=True)
             self.response = _Obj(response_data) if response_data else None
             self.env = _Env()
             self.variables = _Variables()
@@ -595,7 +559,7 @@ def main():
         if isinstance(val, _List):
             return [_serialize(v) for v in val]
         if isinstance(val, _Obj):
-            return {k: _serialize(v) for k, v in val.__dict__.items()}
+            return {k: _serialize(v) for k, v in val.__dict__.items() if k != '_normalize_collections'}
         if isinstance(val, dict):
             return {k: _serialize(v) for k, v in val.items()}
         if isinstance(val, (list, tuple)):
@@ -613,6 +577,12 @@ def main():
                 v = getattr(obj, k)
                 result[k] = _serialize(v)
         return result
+
+    def _json_equal(a, b):
+        try:
+            return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+        except Exception:
+            return False
 
     def _normalize_operator(op):
         if not isinstance(op, str):
@@ -700,7 +670,10 @@ def main():
         mod_request = _extract(voiden.request, ["url", "method", "headers", "body", "queryParams", "pathParams"])
         mod_response = None
         if voiden.response is not None:
-            mod_response = _extract(voiden.response, ["status", "statusText", "headers", "body", "time", "size"])
+            candidate_response = _extract(voiden.response, ["status", "statusText", "headers", "body", "time", "size"])
+            original_response = _serialize(response_data) if response_data is not None else None
+            if original_response is None or not _json_equal(candidate_response, original_response):
+                mod_response = candidate_response
 
         result = {
             "success": True,
@@ -732,36 +705,6 @@ async function executeScriptInProcess(scriptBody: string, vdApi: VdApi): Promise
   const logs: ScriptLog[] = [];
   const assertions: Array<{ passed: boolean; message: string; condition?: string; actualValue?: any; operator?: string; expectedValue?: any; reason?: string }> = [];
   let cancelled = false;
-  const toCollectionArray = (input: any): Array<{ key: string; value: string; enabled?: boolean }> => {
-    if (Array.isArray(input)) {
-      return input
-        .filter((item) => item && typeof item === 'object')
-        .map((item: any) => ({
-          key: String(item.key ?? '').trim(),
-          value: String(item.value ?? ''),
-          enabled: item.enabled !== false,
-        }))
-        .filter((item) => item.key);
-    }
-    if (input && typeof input === 'object') {
-      if (Object.prototype.hasOwnProperty.call(input, 'key') && Object.prototype.hasOwnProperty.call(input, 'value')) {
-        const key = String((input as any).key ?? '').trim();
-        if (!key) return [];
-        return [{ key, value: String((input as any).value ?? ''), enabled: (input as any).enabled !== false }];
-      }
-      return Object.entries(input)
-        .map(([key, value]) => ({ key: String(key ?? '').trim(), value: String(value ?? ''), enabled: true }))
-        .filter((item) => item.key);
-    }
-    return [];
-  };
-  const normalizeRequestCollections = (req: any) => {
-    if (!req || typeof req !== 'object') return req;
-    req.headers = toCollectionArray(req.headers);
-    req.queryParams = toCollectionArray(req.queryParams);
-    req.pathParams = toCollectionArray(req.pathParams);
-    return req;
-  };
   const normalizeLevel = (value: any): ScriptLog['level'] | null => {
     if (typeof value !== 'string') return null;
     const lowered = value.toLowerCase();
@@ -840,7 +783,7 @@ async function executeScriptInProcess(scriptBody: string, vdApi: VdApi): Promise
   };
 
   const voiden: VdApi = {
-    request: normalizeRequestCollections(vdApi.request),
+    request: vdApi.request,
     response: vdApi.response,
     env: vdApi.env,
     variables: vdApi.variables,

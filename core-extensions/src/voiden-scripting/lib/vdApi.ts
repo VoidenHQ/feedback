@@ -6,6 +6,14 @@ import type { VdRequest, VdResponse } from './types';
 
 type KeyValueItem = { key: string; value: string; enabled?: boolean };
 
+function isSameJson(a: any, b: any): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 function toEnabledRecord(input: any): Record<string, string> {
   const out: Record<string, string> = {};
   if (!input) return out;
@@ -145,15 +153,20 @@ export function buildVdResponse(responseState: any): VdResponse {
  * Apply VdResponse modifications back to the pipeline's RestApiResponseState.
  */
 export function applyVdResponseToState(vdResponse: VdResponse, responseState: any): void {
-  responseState.status = vdResponse.status;
-  responseState.statusText = vdResponse.statusText;
+  // Apply only changed fields to avoid restructuring response payload unnecessarily.
+  const current = buildVdResponse(responseState);
 
-  responseState.headers = Object.entries(vdResponse.headers).map(([key, value]) => ({
-    key,
-    value,
-  }));
-
-  responseState.body = vdResponse.body;
+  if (!isSameJson(current.status, vdResponse.status)) {
+    responseState.status = vdResponse.status;
+  }
+  if (!isSameJson(current.statusText, vdResponse.statusText)) {
+    responseState.statusText = vdResponse.statusText;
+  }
+  if (!isSameJson(current.body, vdResponse.body)) {
+    responseState.body = vdResponse.body;
+  }
+  // Intentionally do not mutate response headers from scripting.
+  // This avoids any structural serialization/reformatting of transport headers.
 }
 
 /**
