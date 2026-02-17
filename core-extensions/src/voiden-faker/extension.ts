@@ -6,7 +6,7 @@ import { preSendFakerHook } from './lib/pipelineHook';
  */
 export class VoidenFakerExtension {
   name = 'voiden-faker';
-  version = '1.0.0';
+  version = '1.1.0';
   description = 'Generate fake data using Faker.js in your requests';
   author = 'Voiden Team';
   icon = '🎲';

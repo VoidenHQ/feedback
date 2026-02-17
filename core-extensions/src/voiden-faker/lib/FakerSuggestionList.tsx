@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 interface FakerSuggestionListProps {
   items: Array<{
@@ -6,8 +6,12 @@ interface FakerSuggestionListProps {
     description: string;
     example: string;
     category: string;
+    argsTemplate?: string;
+    paramsSummary?: string;
+    paramsType?: string;
+    paramsCount?: number;
   }>;
-  command: (item: { path: string }) => void;
+  command: (item: { path: string; withArgsTemplate?: boolean }) => void;
 }
 
 interface FakerSuggestionListRef {
@@ -17,11 +21,12 @@ interface FakerSuggestionListRef {
 export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSuggestionListProps>(
   (props, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const listRef = useRef<HTMLDivElement>(null);
 
-    const selectItem = (index: number) => {
+    const selectItem = (index: number, withArgsTemplate = false) => {
       const item = props.items[index];
       if (item) {
-        props.command({ path: item.path });
+        props.command({ path: item.path, withArgsTemplate });
       }
     };
 
@@ -33,11 +38,23 @@ export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSugge
       setSelectedIndex((selectedIndex + 1) % props.items.length);
     };
 
-    const enterHandler = () => {
-      selectItem(selectedIndex);
+    const enterHandler = (withArgsTemplate = false) => {
+      selectItem(selectedIndex, withArgsTemplate);
     };
 
     useEffect(() => setSelectedIndex(0), [props.items]);
+
+    useEffect(() => {
+      const listElement = listRef.current;
+      if (!listElement) {
+        return;
+      }
+
+      const selectedButton = listElement.querySelector<HTMLElement>(`[data-faker-index="${selectedIndex}"]`);
+      if (selectedButton) {
+        selectedButton.scrollIntoView({ block: 'nearest' });
+      }
+    }, [selectedIndex]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
@@ -50,7 +67,7 @@ export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSugge
           return true;
         }
         if (event.key === 'Enter') {
-          enterHandler();
+          enterHandler(event.ctrlKey || event.metaKey);
           return true;
         }
         return false;
@@ -74,13 +91,10 @@ export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSugge
       }
       acc[category].push({ ...item, originalIndex });
       return acc;
-    }, {} as Record<string, Array<{ path: string; description: string; example: string; category: string; originalIndex: number }>>);
-
-    // Flatten for selection indexing
-    const flatItems = Object.entries(groupedItems).flatMap(([category, items]) => items);
+    }, {} as Record<string, Array<{ path: string; description: string; example: string; category: string; argsTemplate?: string; paramsSummary?: string; paramsType?: string; paramsCount?: number; originalIndex: number }>>);
 
     return (
-      <div className="text-xs z-50 min-w-80 max-h-80 overflow-auto rounded-md border border-border bg-panel shadow-lg">
+      <div ref={listRef} className="suggestion-list text-xs z-50 min-w-80 max-h-80 overflow-auto rounded-md border border-border bg-panel shadow-lg">
         {props.items.length > 0 ? (
           <div className="p-2">
             {Object.entries(groupedItems).map(([category, items], categoryIndex) => (
@@ -93,24 +107,27 @@ export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSugge
                 <div className="space-y-0.5 mt-1">
                   {items.map((item) => {
                     const functionName = formatFakerFunction(item.path);
-                    const index = flatItems.findIndex(i => i.path === item.path);
+                    const supportsArgsTemplate = Boolean(item.argsTemplate);
+                    const index = item.originalIndex;
                     return (
                       <button
                         key={item.path}
+                        type="button"
+                        data-faker-index={index}
                         className={`${
                           index === selectedIndex ? 'bg-active ring-1 ring-border' : ''
-                        } relative flex w-full cursor-pointer select-none items-center rounded px-3 py-2 outline-none transition-all hover:bg-active group`}
-                        onClick={() => selectItem(index)}
+                        } relative flex w-full cursor-pointer select-none items-center rounded px-3 py-2 text-text outline-none transition-all hover:bg-active group`}
+                        onClick={(event) => selectItem(index, (event.ctrlKey || event.metaKey) && supportsArgsTemplate)}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           {/* Faker chip */}
-                          <div className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 rounded border border-border bg-panel px-2 py-1 text-xs font-medium whitespace-nowrap">
                             <span>Faker</span>
-                            <span className="text-blue-300">→</span>
+                            <span className="text-comment">→</span>
                             <span className="font-mono">{functionName}</span>
                           </div>
                           {/* Example preview */}
-                          <div className="text-xs text-green-500 font-mono truncate">
+                          <div className="text-xs text-comment font-mono truncate">
                             {item.example}
                           </div>
                         </div>
@@ -118,6 +135,11 @@ export const FakerSuggestionList = forwardRef<FakerSuggestionListRef, FakerSugge
                         <div className="text-xs text-comment ml-2 truncate">
                           {item.description}
                         </div>
+                        {supportsArgsTemplate && (
+                          <div className="ml-2 rounded border border-border px-1.5 py-0.5 text-[10px] text-comment whitespace-nowrap">
+                            Ctrl+Enter: params
+                          </div>
+                        )}
                       </button>
                     );
                   })}
