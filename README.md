@@ -54,6 +54,12 @@ We love hearing about new possibilities. Use the **Feature request** template to
 
 Open a general issue or leave a note.
 
+### 4. Or join us in office hours every friday!
+
+We host weekly Voiden Office Hours on Discord. It’s meant to be a casual space to hang out and discuss about new  ideas, features, roadmap updates, and answer contributor and user questions.
+
+If you are using Voiden or thinking about contributing, come join the conversation: https://discord.gg/kxnmsUDe?event=1473246419006656617
+
 ---
 
 Thanks for sharing your thoughts with us 💜
