@@ -14,6 +14,9 @@ export const PreScriptHelp = () => (
       <p>voiden.request.body — Read/write body</p>
       <p>voiden.request.queryParams — Read/write query params</p>
       <p>voiden.request.pathParams — Read/write path params</p>
+      <p className="font-semibold text-comment mt-2">voiden.env</p>
+      <p>JS: await voiden.env.get(key)</p>
+      <p>Python: voiden.env.get(key)</p>
       <p className="font-semibold text-comment mt-2">voiden.variables</p>
       <p>JS: await voiden.variables.get(key) / .set(key, val)</p>
       <p>Python: voiden.variables.get(key) / .set(key, val)</p>
@@ -40,6 +43,9 @@ export const PostScriptHelp = () => (
       <p>voiden.response.size — Size in bytes</p>
       <p className="font-semibold text-comment mt-2">voiden.request (read-only)</p>
       <p>voiden.request.url, .method, .headers, .body</p>
+      <p className="font-semibold text-comment mt-2">voiden.env</p>
+      <p>JS: await voiden.env.get(key)</p>
+      <p>Python: voiden.env.get(key)</p>
       <p className="font-semibold text-comment mt-2">voiden.variables</p>
       <p>JS: await voiden.variables.get(key) / .set(key, val)</p>
       <p>Python: voiden.variables.get(key) / .set(key, val)</p>

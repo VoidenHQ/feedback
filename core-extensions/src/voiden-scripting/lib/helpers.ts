@@ -35,6 +35,7 @@ export const scriptingHelpers: ScriptingHelpers = {
     const vdApi: VdApi = {
       request: vdRequest,
       response: vdResponse,
+      env: { get: async () => undefined },
       variables: { get: async () => undefined, set: async () => {} },
       log: () => {},
       cancel: () => {},

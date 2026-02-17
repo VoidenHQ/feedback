@@ -12,7 +12,7 @@ const SCRIPT_TIMEOUT_MS = 5_000;
 type RpcRequestMessage = {
   type: 'rpc:request';
   id: number;
-  method: 'variables:get' | 'variables:set';
+  method: 'env:get' | 'variables:get' | 'variables:set';
   args: any[];
 };
 
@@ -149,6 +149,9 @@ const workerSource = `
       const voiden = {
         request: requestState,
         response: responseState,
+        env: {
+          get: (key) => rpc('env:get', [key]),
+        },
         variables: {
           get: (key) => rpc('variables:get', [key]),
           set: (key, value) => rpc('variables:set', [key, value]),
@@ -240,6 +243,7 @@ process.stdin.on('data', (c) => _chunks.push(c));
 process.stdin.on('end', () => {
   const _input = JSON.parse(Buffer.concat(_chunks).toString('utf-8'));
   const _workerSource = _input.workerSource;
+  const _envData = _input.envVars || {};
   const _variablesData = _input.variables || {};
   const _modifiedVariables = {};
 
@@ -274,6 +278,9 @@ process.stdin.on('end', () => {
       let result;
       try {
         switch (method) {
+          case 'env:get':
+            result = _envData[args[0]];
+            break;
           case 'variables:get':
             result = _variablesData[args[0]];
             break;
@@ -343,6 +350,7 @@ def main():
 
     request_data = input_data.get("request", {})
     response_data = input_data.get("response", None)
+    env_data = input_data.get("envVars", {})
     variables_data = input_data.get("variables", {})
 
     logs = []
@@ -384,10 +392,15 @@ def main():
             variables_data[key] = serialized
             modified_variables[key] = serialized
 
+    class _Env:
+        def get(self, key):
+            return env_data.get(key)
+
     class _Vd:
         def __init__(self):
             self.request = _Obj(request_data)
             self.response = _Obj(response_data) if response_data else None
+            self.env = _Env()
             self.variables = _Variables()
 
         def log(self, *args):
@@ -649,6 +662,7 @@ async function executeScriptInProcess(scriptBody: string, vdApi: VdApi): Promise
   const voiden: VdApi = {
     request: vdApi.request,
     response: vdApi.response,
+    env: vdApi.env,
     variables: vdApi.variables,
     log: (levelOrMessage: any, ...args: any[]) => {
       const normalized = normalizeLevel(levelOrMessage);
@@ -713,7 +727,20 @@ async function executePythonScript(
   scriptBody: string,
   vdApi: VdApi
 ): Promise<ScriptExecutionResult> {
+  let envVars: Record<string, string> = {};
   let variables: Record<string, any> = {};
+
+  try {
+    const envLoad = await (window as any).electron?.env?.load?.();
+    const activeEnvPath = envLoad?.activeEnv;
+    const allEnvData = envLoad?.data;
+    if (activeEnvPath && allEnvData && typeof allEnvData === 'object') {
+      const activeEnv = allEnvData[activeEnvPath];
+      if (activeEnv && typeof activeEnv === 'object') {
+        envVars = activeEnv;
+      }
+    }
+  } catch { /* env unavailable */ }
 
   try {
     const readResult = await (window as any).electron?.variables?.read?.();
@@ -737,7 +764,7 @@ async function executePythonScript(
       pythonWrapper: pythonWrapperSource,
       request: vdApi.request,
       response: vdApi.response,
-      envVars: {},
+      envVars,
       variables,
     });
 
@@ -803,7 +830,20 @@ async function executeNodeScript(
   scriptBody: string,
   vdApi: VdApi
 ): Promise<ScriptExecutionResult> {
+  let envVars: Record<string, string> = {};
   let variables: Record<string, any> = {};
+
+  try {
+    const envLoad = await (window as any).electron?.env?.load?.();
+    const activeEnvPath = envLoad?.activeEnv;
+    const allEnvData = envLoad?.data;
+    if (activeEnvPath && allEnvData && typeof allEnvData === 'object') {
+      const activeEnv = allEnvData[activeEnvPath];
+      if (activeEnv && typeof activeEnv === 'object') {
+        envVars = activeEnv;
+      }
+    }
+  } catch { /* env unavailable */ }
 
   try {
     const readResult = await (window as any).electron?.variables?.read?.();
@@ -828,7 +868,7 @@ async function executeNodeScript(
       workerSource,
       request: vdApi.request,
       response: vdApi.response,
-      envVars: {},
+      envVars,
       variables,
     });
 
@@ -947,6 +987,9 @@ export async function executeScript(
         try {
           let result: any;
           switch (method) {
+            case 'env:get':
+              result = await vdApi.env.get(args[0]);
+              break;
             case 'variables:get':
               result = await vdApi.variables.get(args[0]);
               break;

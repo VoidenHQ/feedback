@@ -27,9 +27,14 @@ export interface VdVariables {
   set: (key: string, value: any) => Promise<void>;
 }
 
+export interface VdEnv {
+  get: (key: string) => Promise<any>;
+}
+
 export interface VdApi {
   request: VdRequest;
   response?: VdResponse;
+  env: VdEnv;
   variables: VdVariables;
   log: (levelOrMessage: any, ...args: any[]) => void;
   assert?: (actual: any, operator: string, expectedValue: any, message?: string) => void;

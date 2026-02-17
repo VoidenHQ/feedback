@@ -13,12 +13,14 @@ export interface ScriptValidationError {
 
 /** voiden/vd methods that return Promises and require 'await'. */
 const ASYNC_VD_METHODS = [
+  'voiden.env.get',
   'voiden.variables.set',
   'voiden.variables.get',
 ];
 
 /** Supported function calls exposed by the scripting runtime. */
 const SUPPORTED_VD_CALLS = new Set([
+  'voiden.env.get',
   'voiden.variables.set',
   'voiden.variables.get',
   'voiden.log',
@@ -235,6 +237,19 @@ function lintVdCallArguments(
     return errors;
   }
 
+  if (method === 'voiden.env.get') {
+    if (argCount !== 1) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: "voiden.env.get expects 1 argument: key.",
+      });
+    }
+    return errors;
+  }
+
   if (method === 'voiden.variables.set') {
     if (argCount !== 2) {
       errors.push({
@@ -409,7 +424,7 @@ export function validateScript(scriptBody: string): ScriptValidationError[] {
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
         });
         continue;
       }
@@ -554,7 +569,7 @@ export function validatePythonScript(scriptBody: string): ScriptValidationError[
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
         });
         continue;
       }

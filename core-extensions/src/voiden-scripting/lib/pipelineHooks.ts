@@ -8,7 +8,7 @@
  */
 
 import { executeScript } from './scriptEngine';
-import { buildVdRequest, buildVdResponse, applyVdRequestToState, applyVdResponseToState, buildVariablesApi } from './vdApi';
+import { buildVdRequest, buildVdResponse, applyVdRequestToState, applyVdResponseToState, buildVariablesApi, buildEnvApi } from './vdApi';
 import { validatePythonScript, validateScript } from './validateScript';
 import { scriptLogStore } from './logStore';
 import type { VdApi, ScriptLanguage } from './types';
@@ -160,10 +160,12 @@ export async function preSendScriptHook(context: any): Promise<void> {
 
   const vdRequest = buildVdRequest(requestState);
   const variablesApi = buildVariablesApi();
+  const envApi = buildEnvApi();
 
   const vdApi: VdApi = {
     request: vdRequest,
     response: undefined,
+    env: envApi,
     variables: variablesApi,
     log: () => {},
     cancel: () => {},
@@ -247,10 +249,12 @@ export async function postProcessScriptHook(context: any): Promise<void> {
   const vdRequest = buildVdRequest(requestState);
   const vdResponse = buildVdResponse(responseState);
   const variablesApi = buildVariablesApi();
+  const envApi = buildEnvApi();
 
   const vdApi: VdApi = {
     request: vdRequest,
     response: vdResponse,
+    env: envApi,
     variables: variablesApi,
     log: () => {},
     cancel: () => {},

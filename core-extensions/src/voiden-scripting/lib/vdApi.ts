@@ -132,3 +132,28 @@ export function buildVariablesApi(): { get: (key: string) => Promise<any>; set: 
     },
   };
 }
+
+/**
+ * Build voiden.env API from the active environment file.
+ */
+export function buildEnvApi(): { get: (key: string) => Promise<any> } {
+  return {
+    get: async (key: string): Promise<any> => {
+      try {
+        const envLoad = await (window as any).electron?.env?.load?.();
+        const activeEnvPath = envLoad?.activeEnv;
+        const envData = envLoad?.data;
+        if (!activeEnvPath || !envData || typeof envData !== 'object') {
+          return undefined;
+        }
+        const activeEnv = envData[activeEnvPath];
+        if (!activeEnv || typeof activeEnv !== 'object') {
+          return undefined;
+        }
+        return activeEnv[key];
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}

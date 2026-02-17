@@ -13,8 +13,8 @@ import {
 } from './lib/pipelineHooks';
 import { tr } from '@faker-js/faker';
 
-const PRE_SCRIPT_DEFAULT = '// Pre-request script\n// Use voiden.request, voiden.variables, voiden.log, voiden.cancel\n';
-const POST_SCRIPT_DEFAULT = '// Post-response script\n// Use voiden.request, voiden.response, voiden.variables, voiden.log\n';
+const PRE_SCRIPT_DEFAULT = '// Pre-request script\n// Use voiden.request, voiden.env, voiden.variables, voiden.log, voiden.cancel\n';
+const POST_SCRIPT_DEFAULT = '// Post-response script\n// Use voiden.request, voiden.response, voiden.env, voiden.variables, voiden.log\n';
 
 export default function createVoidenScriptingPlugin(context: any) {
   const extendedContext = {

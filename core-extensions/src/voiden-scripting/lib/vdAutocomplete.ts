@@ -29,6 +29,7 @@ const VD_COMPLETIONS: VdCompletion[] = [
   // ── Top-level ──────────────────────────────────────────────
   { path: 'request',   type: 'keyword',  detail: 'object',   info: 'Request data (url, method, headers, body, queryParams, pathParams)', boost: 100 },
   { path: 'response',  type: 'keyword',  detail: 'object',   info: 'Response data (status, statusText, headers, body, time, size)', boost: 99, postOnly: true },
+  { path: 'env',       type: 'keyword',  detail: 'object',   info: 'Environment access (get)', boost: 98 },
   { path: 'variables', type: 'keyword',  detail: 'object',   info: 'Runtime variable access (get, set)', boost: 97 },
   { path: 'log',       type: 'function', detail: '(message | level, ...args)', info: 'Log output. Examples: voiden.log("hello"), voiden.log("warn", "rate limited")', apply: 'log(levelOrMessage, ...args)', boost: 96 },
   { path: 'assert',    type: 'function', detail: '(actual, operator, expectedValue, message?)', info: 'Assertion API. Example: voiden.assert(response.status, "==", 200, "Status OK")', apply: 'assert(actual, operator, expectedValue, message)', boost: 91 },
@@ -49,6 +50,9 @@ const VD_COMPLETIONS: VdCompletion[] = [
   { path: 'response.body',       type: 'property', detail: 'any',    info: 'Parsed response body (JSON object, string, etc.)', postOnly: true },
   { path: 'response.time',       type: 'property', detail: 'number', info: 'Response time in milliseconds', postOnly: true },
   { path: 'response.size',       type: 'property', detail: 'number', info: 'Response size in bytes', postOnly: true },
+
+  // ── voiden.env.* ─────────────────────────────────────────
+  { path: 'env.get', type: 'method', detail: '(key: string) → Promise<any>', info: 'Read value from active environment. Usage: await voiden.env.get("API_KEY")', apply: 'env.get(key)', boost: 89 },
 
   // ── voiden.variables.* ────────────────────────────────────
   { path: 'variables.get', type: 'method', detail: '(key: string) → Promise<any>', info: 'Get a runtime variable from .voiden/.process.env.json. Usage: await voiden.variables.get("token")', apply: 'variables.get(key)', boost: 88 },
