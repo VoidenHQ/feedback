@@ -20,6 +20,8 @@ import { registerSearchIpcHandler } from "./main/ipc/search";
 import { registerContextMenuIpcHandlers } from "./main/ipc/contextMenus";
 import { registerThemeIpcHandlers } from "./main/ipc/themes";
 import { registerCliIpcHandlers } from "./main/ipc/cli";
+import { registerPythonScriptIpcHandler } from "./main/ipc/pythonScript";
+import { registerNodeScriptIpcHandler } from "./main/ipc/nodeScript";
 
 // Import side-effect modules
 import "./main/terminal";
@@ -160,6 +162,8 @@ app.on("ready", async () => {
   registerContextMenuIpcHandlers();
   registerThemeIpcHandlers();
   registerCliIpcHandlers();
+  registerPythonScriptIpcHandler();
+  registerNodeScriptIpcHandler();
   ipcStateHandlers();
 });
 

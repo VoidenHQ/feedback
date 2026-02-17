@@ -22,6 +22,8 @@ export const renderLang = (lang: string) => {
       return [langs.csharp()];
     case "yaml":
       return [yaml()];
+    case "python":
+      return [langs.python()];
     case "text":
     case "plaintext":
       return []; // No syntax highlighting for plain text

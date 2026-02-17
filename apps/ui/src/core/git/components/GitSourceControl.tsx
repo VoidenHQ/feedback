@@ -2,7 +2,7 @@ import { useGetGitStatus, useStageFiles, useUnstageFiles, useCommit, useDiscardF
 import { Loader2, FileIcon, FilePlus, FileEdit, FileX, GitBranch, Check, X, Plus, Minus, RotateCcw, GitCommit } from "lucide-react";
 import { cn } from "@/core/lib/utils";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/core/components/ui/sonner";
 import { useAddPanelTab } from "@/core/layout/hooks";
 import { GitGraph } from "./GitGraph";
 

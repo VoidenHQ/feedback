@@ -11,6 +11,7 @@ import {
   closeSearchPanel,
 } from "@codemirror/search";
 import { indentOnInput, indentUnit } from "@codemirror/language";
+import { linter, lintGutter } from "@codemirror/lint";
 import { createCustomSearchPanel, customSearchPanelStyles } from "../extensions/customSearchPanel";
 import { StateEffect, StateField, RangeSetBuilder } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
@@ -80,6 +81,61 @@ const searchField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+export interface ScriptDiagnostic {
+  line: number;
+  column: number;
+  message: string;
+  severity?: 'error' | 'warning' | 'info';
+}
+
+const lintTooltipTheme = EditorView.theme({
+  ".cm-gutter.cm-gutter-lint": {
+    backgroundColor: "var(--editor-bg)",
+    borderLeft: "1px solid var(--border)",
+    minWidth: "20px",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-gutterElement": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--comment)",
+    opacity: "0.95",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-error": {
+    color: "#ef4444",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-warning": {
+    color: "#f59e0b",
+  },
+  ".cm-gutter.cm-gutter-lint .cm-lint-marker-info": {
+    color: "#3b82f6",
+  },
+  ".cm-tooltip.cm-tooltip-lint": {
+    maxWidth: "min(200px, calc(50vw - 10vh))",
+    border: "1px solid var(--border)",
+    borderRadius: "8px",
+    backgroundColor: "var(--panel)",
+    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.28)",
+    overflow: "hidden",
+    zIndex: "120",
+  },
+  ".cm-tooltip.cm-tooltip-lint .cm-diagnostic": {
+    margin: "0",
+    padding: "8px 10px",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+    borderBottom: "1px solid var(--border)",
+    lineHeight: "1.4",
+    fontSize: "12px",
+    color: "var(--text)",
+    backgroundColor: "var(--editor-bg)",
+  },
+  ".cm-tooltip.cm-tooltip-lint .cm-diagnostic:last-child": {
+    borderBottom: "none",
+  },
+});
+
 interface CodeEditorProps {
   value?: string;
   tiptapProps?: CodeNodeViewRendererProps;
@@ -89,6 +145,8 @@ interface CodeEditorProps {
   onChange?: (value: string) => void;
   autofocus?: boolean;
   showReplace?: boolean;
+  /** Optional lint function — called with editor content, returns diagnostics shown inline. */
+  validateFn?: (content: string) => ScriptDiagnostic[];
 }
 
 export const CodeEditor = ({
@@ -99,6 +157,7 @@ export const CodeEditor = ({
   onChange,
   autofocus = true,
   showReplace = true,
+  validateFn,
 }: CodeEditorProps) => {
   const isRenaming = useFocusStore((state) => state.isRenaming);
 
@@ -268,6 +327,36 @@ export const CodeEditor = ({
     indentOnInput(),
     indentUnit.of("  "),
     ...codemirrorExtensionsFromStore, // Add dynamic extensions from plugins
+    // Custom inline linter from validateFn prop
+    ...(validateFn ? [
+      lintTooltipTheme,
+      lintGutter(),
+      linter((view) => {
+        const content = view.state.doc.toString();
+        const results = validateFn(content);
+        return results.map((r) => {
+          try {
+            const line = view.state.doc.line(r.line);
+            const from = line.from + Math.max(0, r.column - 1);
+            const to = line.to;
+            return {
+              from,
+              to,
+              message: r.message,
+              severity: (r.severity || 'error') as 'error' | 'warning' | 'info',
+              renderMessage: () => {
+                const box = document.createElement('div');
+                box.className = 'voiden-lint-message';
+                box.textContent = r.message;
+                return box;
+              },
+            };
+          } catch {
+            return null;
+          }
+        }).filter(Boolean) as any[];
+      }),
+    ] : []),
     // Filter out Ctrl-w from defaultKeymap to allow browser tab closing
     keymap.of(defaultKeymap.filter(binding => {
       return binding.key !== "Ctrl-w" && binding.key !== "Mod-w";

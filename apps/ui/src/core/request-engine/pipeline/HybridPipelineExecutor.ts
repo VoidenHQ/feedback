@@ -169,6 +169,14 @@ export class HybridPipelineExecutor {
     };
 
     await hookRegistry.executeHooks(PipelineStage.PreSend, context);
+
+    if (requestState?.metadata?.preScriptError) {
+      throw new Error(String(requestState.metadata.preScriptError));
+    }
+
+    if (requestState?.metadata?.scriptCancelled) {
+      this.cancelled = true;
+    }
   }
 
   /**

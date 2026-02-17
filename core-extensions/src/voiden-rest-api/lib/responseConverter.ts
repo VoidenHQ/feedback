@@ -4,8 +4,6 @@
  * Converts HTTP response objects to Voiden document JSON with response nodes
  */
 
-import { url } from "inspector";
-
 export interface HttpResponse {
   statusCode: number;
   statusMessage?: string;
@@ -38,6 +36,24 @@ export interface HttpResponse {
   metadata?: {
     assertionResults?: {
       results: any[];
+      totalAssertions: number;
+      passedAssertions: number;
+      failedAssertions: number;
+    };
+    scriptAssertionResults?: {
+      results: Array<{ passed: boolean; message: string; condition?: string; actualValue?: any; operator?: string; expectedValue?: any; reason?: string }>;
+      totalAssertions: number;
+      passedAssertions: number;
+      failedAssertions: number;
+    };
+    preScriptAssertions?: {
+      results: Array<{ passed: boolean; message: string; condition?: string; actualValue?: any; operator?: string; expectedValue?: any; reason?: string }>;
+      totalAssertions: number;
+      passedAssertions: number;
+      failedAssertions: number;
+    };
+    scriptAssertions?: {
+      results: Array<{ passed: boolean; message: string; condition?: string; actualValue?: any; operator?: string; expectedValue?: any; reason?: string }>;
       totalAssertions: number;
       passedAssertions: number;
       failedAssertions: number;
@@ -144,6 +160,26 @@ export function convertResponseToVoidenDoc(response: HttpResponse): any {
     console.log('[Response Converter] No OpenAPI validation results in response.metadata');
   }
 
+  // Add script assertion results if present
+  const scriptAssertions =
+    response.metadata?.scriptAssertionResults ||
+    response.metadata?.preScriptAssertions ||
+    response.metadata?.scriptAssertions;
+
+  if (scriptAssertions) {
+    console.log('[Response Converter] ✓ Found script assertion results, injecting into response doc');
+    content.push({
+      type: 'script-assertion-results',
+      attrs: {
+        results: scriptAssertions.results || [],
+        totalAssertions: scriptAssertions.totalAssertions ?? (scriptAssertions.results?.length || 0),
+        passedAssertions: scriptAssertions.passedAssertions ?? (scriptAssertions.results || []).filter((r: any) => r?.passed).length,
+        failedAssertions: scriptAssertions.failedAssertions ?? (scriptAssertions.results || []).filter((r: any) => !r?.passed).length,
+      },
+    });
+  } else {
+    console.log('[Response Converter] No script assertion results in response.metadata');
+  }
 
   // Add response headers and request info
   content.push(
