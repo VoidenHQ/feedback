@@ -10,10 +10,10 @@ export const PreScriptHelp = () => (
       <p className="font-semibold text-comment mt-2">voiden.request</p>
       <p>voiden.request.url — Read/write URL</p>
       <p>voiden.request.method — Read/write method</p>
-      <p>voiden.request.headers — Read/write headers object</p>
-      <p>voiden.request.body — Read/write body</p>
-      <p>voiden.request.queryParams — Read/write query params</p>
-      <p>voiden.request.pathParams — Read/write path params</p>
+      <p>voiden.request.headers — Accepts object map, single {'{key,value}'}, or array of {'{key,value}'} (push supported)</p>
+      <p>voiden.request.body — Read/write body (string payload; stringify objects/JSON)</p>
+      <p>voiden.request.queryParams — Accepts object map, single {'{key,value}'}, or array of {'{key,value}'}</p>
+      <p>voiden.request.pathParams — Accepts object map, single {'{key,value}'}, or array of {'{key,value}'}</p>
       <p className="font-semibold text-comment mt-2">voiden.env</p>
       <p>JS: await voiden.env.get(key)</p>
       <p>Python: voiden.env.get(key)</p>
@@ -21,7 +21,7 @@ export const PreScriptHelp = () => (
       <p>JS: await voiden.variables.get(key) / .set(key, val)</p>
       <p>Python: voiden.variables.get(key) / .set(key, val)</p>
       <p className="font-semibold text-comment mt-2">Utilities</p>
-      <p>voiden.log(...args) — Log output</p>
+      <p>voiden.log(message) or voiden.log(level, ...args) — level: log/info/debug/warn/error</p>
       <p>voiden.cancel() — Cancel the request</p>
     </div>
   </div>
@@ -42,7 +42,7 @@ export const PostScriptHelp = () => (
       <p>voiden.response.time — Duration in ms</p>
       <p>voiden.response.size — Size in bytes</p>
       <p className="font-semibold text-comment mt-2">voiden.request (read-only)</p>
-      <p>voiden.request.url, .method, .headers, .body</p>
+      <p>voiden.request.url, .method, .headers, .body (string payload; stringify objects/JSON)</p>
       <p className="font-semibold text-comment mt-2">voiden.env</p>
       <p>JS: await voiden.env.get(key)</p>
       <p>Python: voiden.env.get(key)</p>
@@ -50,7 +50,7 @@ export const PostScriptHelp = () => (
       <p>JS: await voiden.variables.get(key) / .set(key, val)</p>
       <p>Python: voiden.variables.get(key) / .set(key, val)</p>
       <p className="font-semibold text-comment mt-2">Utilities</p>
-      <p>voiden.log(...args) — Log output</p>
+      <p>voiden.log(message) or voiden.log(level, ...args) — level: log/info/debug/warn/error</p>
     </div>
   </div>
 );

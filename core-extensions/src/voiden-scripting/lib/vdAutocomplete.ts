@@ -38,10 +38,13 @@ const VD_COMPLETIONS: VdCompletion[] = [
   // ── voiden.request.* ──────────────────────────────────────
   { path: 'request.url',         type: 'property', detail: 'string',              info: 'Request URL — read/write' },
   { path: 'request.method',      type: 'property', detail: 'string',              info: 'HTTP method (GET, POST, etc.) — read/write' },
-  { path: 'request.headers',     type: 'property', detail: 'Record<string,string>', info: 'Request headers object — read/write. E.g. voiden.request.headers["Authorization"] = "Bearer ..."' },
+  { path: 'request.headers',     type: 'property', detail: 'map | {key,value} | {key,value}[]', info: 'Request headers — supports map, single {key,value}, or array of {key,value} (push supported)' },
+  { path: 'request.headers.push', type: 'method', detail: '(item: {key, value, enabled?})', info: 'Append a header entry. Example: voiden.request.headers.push({ key: "X-Trace", value: "abc" })', apply: 'request.headers.push({ key: "", value: "" })' },
   { path: 'request.body',        type: 'property', detail: 'any',                 info: 'Request body (string or parsed object) — read/write' },
-  { path: 'request.queryParams', type: 'property', detail: 'Record<string,string>', info: 'Query parameters object — read/write' },
-  { path: 'request.pathParams',  type: 'property', detail: 'Record<string,string>', info: 'Path parameters object — read/write' },
+  { path: 'request.queryParams', type: 'property', detail: 'map | {key,value} | {key,value}[]', info: 'Query params — supports map, single {key,value}, or array of {key,value}' },
+  { path: 'request.queryParams.push', type: 'method', detail: '(item: {key, value, enabled?})', info: 'Append a query param. Example: voiden.request.queryParams.push({ key: "page", value: "1" })', apply: 'request.queryParams.push({ key: "", value: "" })' },
+  { path: 'request.pathParams',  type: 'property', detail: 'map | {key,value} | {key,value}[]', info: 'Path params — supports map, single {key,value}, or array of {key,value}' },
+  { path: 'request.pathParams.push', type: 'method', detail: '(item: {key, value, enabled?})', info: 'Append a path param. Example: voiden.request.pathParams.push({ key: "id", value: "123" })', apply: 'request.pathParams.push({ key: "", value: "" })' },
 
   // ── voiden.response.* ─────────────────────────────────────
   { path: 'response.status',     type: 'property', detail: 'number', info: 'HTTP status code (e.g. 200, 404)', postOnly: true },

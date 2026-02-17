@@ -4,25 +4,90 @@
 
 import type { VdRequest, VdResponse } from './types';
 
+type KeyValueItem = { key: string; value: string; enabled?: boolean };
+
+function toEnabledRecord(input: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!input) return out;
+
+  // Preferred pipeline shape: [{ key, value, enabled? }]
+  if (Array.isArray(input)) {
+    input
+      .filter((item: any) => item?.enabled !== false)
+      .forEach((item: any) => {
+        const key = String(item?.key ?? '').trim();
+        if (!key) return;
+        out[key] = String(item?.value ?? '');
+      });
+    return out;
+  }
+
+  // Fallback shape: { key: value }
+  if (typeof input === 'object') {
+    Object.entries(input).forEach(([key, value]) => {
+      const normalizedKey = String(key ?? '').trim();
+      if (!normalizedKey) return;
+      out[normalizedKey] = String(value ?? '');
+    });
+  }
+
+  return out;
+}
+
+function normalizeToKeyValueArray(input: any): KeyValueItem[] {
+  if (!input) return [];
+
+  // Single item shape: { key, value, enabled? }
+  if (
+    typeof input === 'object' &&
+    !Array.isArray(input) &&
+    Object.prototype.hasOwnProperty.call(input, 'key') &&
+    Object.prototype.hasOwnProperty.call(input, 'value')
+  ) {
+    const item = input as any;
+    const key = String(item.key ?? '').trim();
+    if (!key) return [];
+    return [{
+      key,
+      value: String(item.value ?? ''),
+      enabled: item.enabled !== false,
+    }];
+  }
+
+  // Array shape: [{ key, value, enabled? }, ...] (supports push-based construction)
+  if (Array.isArray(input)) {
+    return input
+      .filter((item: any) => item && typeof item === 'object')
+      .map((item: any) => ({
+        key: String(item.key ?? '').trim(),
+        value: String(item.value ?? ''),
+        enabled: item.enabled !== false,
+      }))
+      .filter((item) => item.key.length > 0);
+  }
+
+  // Record/map shape: { Header: "value", ... }
+  if (typeof input === 'object') {
+    return Object.entries(input)
+      .map(([key, value]) => ({
+        key: String(key ?? '').trim(),
+        value: String(value ?? ''),
+        enabled: true,
+      }))
+      .filter((item) => item.key.length > 0);
+  }
+
+  return [];
+}
+
 /**
  * Build VdRequest from pipeline's RestApiRequestState.
- * Converts array-based headers/params to Record-based for script convenience.
+ * Exposes headers/query/path as arrays of { key, value } so scripts can use push/append flows.
  */
 export function buildVdRequest(requestState: any): VdRequest {
-  const headers: Record<string, string> = {};
-  (requestState.headers || [])
-    .filter((h: any) => h.enabled !== false)
-    .forEach((h: any) => { headers[h.key] = h.value; });
-
-  const queryParams: Record<string, string> = {};
-  (requestState.queryParams || [])
-    .filter((p: any) => p.enabled !== false)
-    .forEach((p: any) => { queryParams[p.key] = p.value; });
-
-  const pathParams: Record<string, string> = {};
-  (requestState.pathParams || [])
-    .filter((p: any) => p.enabled !== false)
-    .forEach((p: any) => { pathParams[p.key] = p.value; });
+  const headers = normalizeToKeyValueArray(requestState.headers);
+  const queryParams = normalizeToKeyValueArray(requestState.queryParams);
+  const pathParams = normalizeToKeyValueArray(requestState.pathParams);
 
   return {
     url: requestState.url || '',
@@ -41,25 +106,20 @@ export function applyVdRequestToState(vdRequest: VdRequest, requestState: any): 
   requestState.url = vdRequest.url;
   requestState.method = vdRequest.method;
 
-  requestState.headers = Object.entries(vdRequest.headers).map(([key, value]) => ({
-    key,
-    value,
-    enabled: true,
-  }));
+  requestState.headers = normalizeToKeyValueArray((vdRequest as any).headers);
+  requestState.queryParams = normalizeToKeyValueArray((vdRequest as any).queryParams);
+  requestState.pathParams = normalizeToKeyValueArray((vdRequest as any).pathParams);
 
-  requestState.queryParams = Object.entries(vdRequest.queryParams).map(([key, value]) => ({
-    key,
-    value,
-    enabled: true,
-  }));
-
-  requestState.pathParams = Object.entries(vdRequest.pathParams).map(([key, value]) => ({
-    key,
-    value,
-    enabled: true,
-  }));
-
-  requestState.body = vdRequest.body;
+  // Request pipeline expects body to be string for normal REST payloads.
+  if (vdRequest.body != null && typeof vdRequest.body === 'object') {
+    try {
+      requestState.body = JSON.stringify(vdRequest.body);
+    } catch {
+      requestState.body = String(vdRequest.body);
+    }
+  } else {
+    requestState.body = vdRequest.body;
+  }
 }
 
 /**

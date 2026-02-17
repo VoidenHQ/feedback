@@ -181,9 +181,7 @@ export async function preSendScriptHook(context: any): Promise<void> {
   // Store logs and errors in metadata
   if (!requestState.metadata) requestState.metadata = {};
   requestState.metadata.preScriptLogs = result.logs;
-  const preError = (result.error || result.success === false)
-    ? formatScriptRuntimeError(result.error, scriptBody, language)
-    : undefined;
+  const preError = result.error
   if (preError) requestState.metadata.preScriptError = preError;
 
   // Store assertion results

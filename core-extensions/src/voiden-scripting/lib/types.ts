@@ -4,13 +4,18 @@
 
 export type ScriptLanguage = "javascript" | "python";
 
+export type VdKeyValueCollection =
+  | Record<string, string>
+  | { key: string; value: string; enabled?: boolean }
+  | Array<{ key: string; value: string; enabled?: boolean }>;
+
 export interface VdRequest {
   url: string;
   method: string;
-  headers: Record<string, string>;
+  headers: VdKeyValueCollection;
   body: any;
-  queryParams: Record<string, string>;
-  pathParams: Record<string, string>;
+  queryParams: VdKeyValueCollection;
+  pathParams: VdKeyValueCollection;
 }
 
 export interface VdResponse {

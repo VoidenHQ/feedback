@@ -54,6 +54,40 @@ const workerSource = `
     self.postMessage({ type: 'log', args });
   }
 
+  function _toCollectionArray(input) {
+    if (Array.isArray(input)) {
+      return input
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => ({
+          key: String(item.key ?? '').trim(),
+          value: String(item.value ?? ''),
+          enabled: item.enabled !== false,
+        }))
+        .filter((item) => item.key);
+    }
+
+    if (input && typeof input === 'object') {
+      if (Object.prototype.hasOwnProperty.call(input, 'key') && Object.prototype.hasOwnProperty.call(input, 'value')) {
+        const key = String(input.key ?? '').trim();
+        if (!key) return [];
+        return [{ key, value: String(input.value ?? ''), enabled: input.enabled !== false }];
+      }
+      return Object.entries(input)
+        .map(([key, value]) => ({ key: String(key ?? '').trim(), value: String(value ?? ''), enabled: true }))
+        .filter((item) => item.key);
+    }
+
+    return [];
+  }
+
+  function _normalizeRequestCollections(req) {
+    if (!req || typeof req !== 'object') return req;
+    req.headers = _toCollectionArray(req.headers);
+    req.queryParams = _toCollectionArray(req.queryParams);
+    req.pathParams = _toCollectionArray(req.pathParams);
+    return req;
+  }
+
   function _serializeAssertionValue(val) {
     try {
       return JSON.parse(JSON.stringify(val));
@@ -144,6 +178,7 @@ const workerSource = `
     if (data?.type === 'start') {
       requestState = data.request;
       responseState = data.response;
+      _normalizeRequestCollections(requestState);
       const scriptBody = data.script;
 
       const voiden = {
@@ -358,31 +393,144 @@ def main():
     cancelled = False
     modified_variables = {}
 
+    class _List:
+        def __init__(self, values=None):
+            self._items = []
+            if values:
+                for v in values:
+                    self._items.append(_wrap(v))
+
+        # JS-friendly alias
+        def push(self, *values):
+            if len(values) == 2 and isinstance(values[0], str) and not isinstance(values[1], (dict, list, tuple)):
+                key = values[0].strip()
+                if key:
+                    self._items.append(_wrap({"key": key, "value": str(values[1]), "enabled": True}))
+                return len(self._items)
+
+            for v in values:
+                if isinstance(v, dict) and "key" in v and "value" in v:
+                    key = str(v.get("key", "")).strip()
+                    if not key:
+                        continue
+                    self._items.append(_wrap({
+                        "key": key,
+                        "value": str(v.get("value", "")),
+                        "enabled": v.get("enabled", True) is not False
+                    }))
+                    continue
+                if isinstance(v, dict):
+                    for mk, mv in v.items():
+                        mkey = str(mk).strip()
+                        if not mkey:
+                            continue
+                        self._items.append(_wrap({"key": mkey, "value": str(mv), "enabled": True}))
+                    continue
+                self._items.append(_wrap(v))
+            return len(self._items)
+
+        def append(self, value):
+            self._items.append(_wrap(value))
+
+        def extend(self, values):
+            for v in values:
+                self._items.append(_wrap(v))
+
+        def __iter__(self):
+            return iter(self._items)
+
+        def __len__(self):
+            return len(self._items)
+
+        def __getitem__(self, index):
+            return self._items[index]
+
+        def __setitem__(self, index, value):
+            self._items[index] = _wrap(value)
+
+        def __repr__(self):
+            return repr(self._items)
+
     def _wrap(val):
         if isinstance(val, dict):
             return _Obj(val)
         if isinstance(val, list):
-            return [_wrap(v) for v in val]
+            return _List(val)
         if isinstance(val, tuple):
             return tuple(_wrap(v) for v in val)
         return val
 
+    _REQUEST_COLLECTION_FIELDS = {"headers", "queryParams", "pathParams"}
+
     class _Obj:
         def __init__(self, data):
             for k, v in data.items():
-                setattr(self, k, _wrap(v))
+                setattr(self, k, v)
+
+        def __setattr__(self, key, value):
+            # Keep request collections list-like in Python so .push()/.append() work.
+            if key in _REQUEST_COLLECTION_FIELDS:
+                normalized = _normalize_kv_collection(value)
+                object.__setattr__(self, key, _List(normalized))
+                return
+            object.__setattr__(self, key, _wrap(value))
 
         def __getitem__(self, key):
             return getattr(self, key)
 
         def __setitem__(self, key, value):
-            setattr(self, key, _wrap(value))
+            setattr(self, key, value)
 
         def get(self, key, default=None):
             return getattr(self, key, default)
 
         def items(self):
             return self.__dict__.items()
+
+    def _normalize_kv_collection(value):
+        items = []
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and "key" in item and "value" in item:
+                    key = str(item.get("key", "")).strip()
+                    if not key:
+                        continue
+                    items.append({
+                        "key": key,
+                        "value": str(item.get("value", "")),
+                        "enabled": item.get("enabled", True) is not False
+                    })
+                elif isinstance(item, dict):
+                    for mk, mv in item.items():
+                        mkey = str(mk).strip()
+                        if not mkey:
+                            continue
+                        items.append({"key": mkey, "value": str(mv), "enabled": True})
+            return items
+
+        if isinstance(value, dict):
+            if "key" in value and "value" in value:
+                key = str(value.get("key", "")).strip()
+                if not key:
+                    return []
+                return [{
+                    "key": key,
+                    "value": str(value.get("value", "")),
+                    "enabled": value.get("enabled", True) is not False
+                }]
+            for mk, mv in value.items():
+                mkey = str(mk).strip()
+                if not mkey:
+                    continue
+                items.append({"key": mkey, "value": str(mv), "enabled": True})
+            return items
+
+        return []
+
+    if isinstance(request_data, dict):
+        request_data["headers"] = _normalize_kv_collection(request_data.get("headers"))
+        request_data["queryParams"] = _normalize_kv_collection(request_data.get("queryParams"))
+        request_data["pathParams"] = _normalize_kv_collection(request_data.get("pathParams"))
 
     class _Variables:
         def get(self, key):
@@ -444,6 +592,8 @@ def main():
             cancelled = True
 
     def _serialize(val):
+        if isinstance(val, _List):
+            return [_serialize(v) for v in val]
         if isinstance(val, _Obj):
             return {k: _serialize(v) for k, v in val.__dict__.items()}
         if isinstance(val, dict):
@@ -461,7 +611,7 @@ def main():
         for k in keys:
             if hasattr(obj, k):
                 v = getattr(obj, k)
-                result[k] = _serialize(v) if isinstance(v, _Obj) else v
+                result[k] = _serialize(v)
         return result
 
     def _normalize_operator(op):
@@ -582,6 +732,36 @@ async function executeScriptInProcess(scriptBody: string, vdApi: VdApi): Promise
   const logs: ScriptLog[] = [];
   const assertions: Array<{ passed: boolean; message: string; condition?: string; actualValue?: any; operator?: string; expectedValue?: any; reason?: string }> = [];
   let cancelled = false;
+  const toCollectionArray = (input: any): Array<{ key: string; value: string; enabled?: boolean }> => {
+    if (Array.isArray(input)) {
+      return input
+        .filter((item) => item && typeof item === 'object')
+        .map((item: any) => ({
+          key: String(item.key ?? '').trim(),
+          value: String(item.value ?? ''),
+          enabled: item.enabled !== false,
+        }))
+        .filter((item) => item.key);
+    }
+    if (input && typeof input === 'object') {
+      if (Object.prototype.hasOwnProperty.call(input, 'key') && Object.prototype.hasOwnProperty.call(input, 'value')) {
+        const key = String((input as any).key ?? '').trim();
+        if (!key) return [];
+        return [{ key, value: String((input as any).value ?? ''), enabled: (input as any).enabled !== false }];
+      }
+      return Object.entries(input)
+        .map(([key, value]) => ({ key: String(key ?? '').trim(), value: String(value ?? ''), enabled: true }))
+        .filter((item) => item.key);
+    }
+    return [];
+  };
+  const normalizeRequestCollections = (req: any) => {
+    if (!req || typeof req !== 'object') return req;
+    req.headers = toCollectionArray(req.headers);
+    req.queryParams = toCollectionArray(req.queryParams);
+    req.pathParams = toCollectionArray(req.pathParams);
+    return req;
+  };
   const normalizeLevel = (value: any): ScriptLog['level'] | null => {
     if (typeof value !== 'string') return null;
     const lowered = value.toLowerCase();
@@ -660,7 +840,7 @@ async function executeScriptInProcess(scriptBody: string, vdApi: VdApi): Promise
   };
 
   const voiden: VdApi = {
-    request: vdApi.request,
+    request: normalizeRequestCollections(vdApi.request),
     response: vdApi.response,
     env: vdApi.env,
     variables: vdApi.variables,

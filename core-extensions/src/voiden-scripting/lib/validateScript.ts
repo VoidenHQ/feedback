@@ -23,6 +23,9 @@ const SUPPORTED_VD_CALLS = new Set([
   'voiden.env.get',
   'voiden.variables.set',
   'voiden.variables.get',
+  'voiden.request.headers.push',
+  'voiden.request.queryParams.push',
+  'voiden.request.pathParams.push',
   'voiden.log',
   'voiden.assert',
   'voiden.cancel',
@@ -292,6 +295,33 @@ function lintVdCallArguments(
     return errors;
   }
 
+  if (
+    method === 'voiden.request.headers.push' ||
+    method === 'voiden.request.queryParams.push' ||
+    method === 'voiden.request.pathParams.push'
+  ) {
+    if (argCount < 1) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: `${method} expects at least 1 argument. Use push({ key: "name", value: "value" }).`,
+      });
+      return errors;
+    }
+    if (argCount > 1) {
+      errors.push({
+        line,
+        column,
+        severity: 'warning',
+        method,
+        message: `${method} accepts one entry per call. Use push({ key, value }) or call push multiple times.`,
+      });
+    }
+    return errors;
+  }
+
   return errors;
 }
 
@@ -424,7 +454,7 @@ export function validateScript(scriptBody: string): ScriptValidationError[] {
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.request.headers/queryParams/pathParams.push, voiden.log, voiden.assert, voiden.cancel.`,
         });
         continue;
       }
@@ -569,7 +599,7 @@ export function validatePythonScript(scriptBody: string): ScriptValidationError[
           line: i + 1,
           column: call.column,
           method: call.method,
-          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.log, voiden.assert, voiden.cancel.`,
+          message: `Unknown function '${call.method}()'. Supported: voiden.env.get, voiden.variables.get/set, voiden.request.headers/queryParams/pathParams.push, voiden.log, voiden.assert, voiden.cancel.`,
         });
         continue;
       }
