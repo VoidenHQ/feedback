@@ -5,13 +5,14 @@
   "colors": {
     "_comment": "=== SIMPLIFIED THEME SYSTEM (45 variables) ===",
 
-    "_section_base": "=== BASE COLORS (6) ===",
+    "_section_base": "=== BASE COLORS (7) ===",
     "--bg-primary": "#2e3440",
     "--bg-secondary": "#3b4252",
     "--fg-primary": "#d8dee9",
     "--fg-secondary": "#4c566a",
     "--border": "#434c5e",
     "--selection": "#4c566a",
+    "--hover": "#00000024",
 
     "_section_semantic": "=== SEMANTIC COLORS (13) ===",
     "--success": "#a3be8c",

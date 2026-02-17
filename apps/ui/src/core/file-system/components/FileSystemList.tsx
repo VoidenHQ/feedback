@@ -22,6 +22,8 @@ import {
   ArrowBigDown,
   Info,
   ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   File,
   Folder,
   FolderOpen,
@@ -598,7 +600,37 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
         path: node.data.path,
         type: node.data.type,
         name: node.data.name,
+        isProjectRoot: node.level === 0,
       });
+    }
+  };
+
+  const expandAllFromFolder = (folderNode: NodeApi<ExtendedFileTree>) => {
+    const openDescendants = (currentNode: NodeApi<ExtendedFileTree>) => {
+      if (currentNode.data.type === "folder" && !currentNode.isOpen) {
+        currentNode.open();
+      }
+      currentNode.children?.forEach(openDescendants);
+    };
+
+    openDescendants(folderNode);
+  };
+
+  const collapseAllFromFolder = (folderNode: NodeApi<ExtendedFileTree>) => {
+    const closeDescendants = (currentNode: NodeApi<ExtendedFileTree>) => {
+      currentNode.children?.forEach((child) => {
+        if (child.data.type === "folder") {
+          closeDescendants(child);
+          if (child.isOpen) {
+            child.close();
+          }
+        }
+      });
+    };
+
+    closeDescendants(folderNode);
+    if (folderNode.isOpen) {
+      folderNode.close();
     }
   };
 
@@ -607,8 +639,8 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
       style={style}
       ref={dragHandle}
       className={cn(
-        "h-6 transition-colors",
-        !isDragOver && 'hover:bg-active',
+        "group h-6 transition-colors",
+        !isDragOver && 'hover:bg-hover',
         (activeFile?.source === node.data.path || node.isSelected) && !isDragOver && "bg-active",
         node.isFocused && !isDragOver && "bg-active ring-0",
         (isDragOver || isInternalDropTargetFolder) && 'bg-accent/30 border-l-2 border-accent',
@@ -626,8 +658,8 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
           <div key={i} className="absolute w-px bg-active h-6" style={{ left: `${(i + 1) * 12 + 3}px` }} />
         ))}
       </div>
-      <div className="pl-2 relative flex items-center gap-2">
-        <div className="flex items-center">
+      <div className="pl-2 relative flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           {node.data.type === "folder" && (
             <>
               <ChevronRight size={14} className={`transition-transform ${node.isOpen ? "rotate-90" : ""}`} />
@@ -636,8 +668,7 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
             </>
           )}
           {node.data.type !== "folder" && getFileIcon(node.data.name, node.data.path)}
-        </div>
-        {node.isEditing ? (
+          {node.isEditing ? (
           <RenameInput node={node} error={error} setError={setError} onSubmit={onSubmit} setIsRenaming={setIsRenaming} />
         ) : (
           <span
@@ -660,6 +691,63 @@ function TreeNode({ node, style, dragHandle, activeFile, removeTemporaryNode }: 
             {node.data.name}
           </span>
         )}
+        </div>
+        {
+          node.data.type === "folder" && (
+            <div className="flex items-center px-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      collapseAllFromFolder(node);
+                    }}
+                    className="p-0.5 rounded hover:bg-hover ml-1"
+                    title="Collapse all inside this folder"
+                  >
+                    <ChevronsUp size={12} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content
+                  align="end"
+                  sideOffset={4}
+                  alignOffset={4}
+                  side="bottom"
+                  avoidCollisions
+                  collisionPadding={8}
+                  className="border text-comment bg-panel border-border p-1 text-sm z-10"
+                >
+                  Collapse all
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      expandAllFromFolder(node);
+                    }}
+                    className="p-0.5 rounded hover:bg-hover"
+                    title="Expand all inside this folder"
+                  >
+                    <ChevronsDown size={12} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content
+                  align="end"
+                  sideOffset={4}
+                  alignOffset={4}
+                  side="bottom"
+                  avoidCollisions
+                  collisionPadding={8}
+                  className="border text-comment bg-panel border-border p-1 text-sm z-10"
+                >
+                  Expand all
+                </Tooltip.Content>
+              </Tooltip.Root>
+            </div>
+          )
+        }
       </div>
     </div>
   );
@@ -1031,13 +1119,13 @@ export const FileSystemList = () => {
       <div className="flex flex-col h-full w-full px-4 py-2 gap-4">
         <div className="text-sm text-text flex flex-col gap-2 mt-4 ">
           Create a new Voiden project to get started.
-          <button style={{maxWidth:'200px'}} className="bg-button-primary hover:bg-button-primary-hover rounded transition px-2 py-1" onClick={() => setIsNewProjectMode(true)}>
+          <button style={{ maxWidth: '200px' }} className="bg-button-primary hover:bg-button-primary-hover rounded transition px-2 py-1" onClick={() => setIsNewProjectMode(true)}>
             New Voiden project
           </button>
         </div>
         <div className="text-sm text-text flex flex-col gap-2 mt-4">
           Or open an existing project.
-          <button style={{maxWidth:'200px'}} className="bg-button-primary hover:bg-button-primary-hover transition px-2 py-1" onClick={() => openProject("~/")}>
+          <button style={{ maxWidth: '200px' }} className="bg-button-primary hover:bg-button-primary-hover transition px-2 py-1" onClick={() => openProject("~/")}>
             Open a project
           </button>
         </div>
@@ -1057,6 +1145,7 @@ export const FileSystemList = () => {
             path: data.path,
             type: data.type,
             name: data.name,
+            isProjectRoot: true,
           });
         }
       }}
@@ -1228,6 +1317,7 @@ export const FileSystemList = () => {
                   path: data.path,
                   type: data.type,
                   name: data.name,
+                  isProjectRoot: true,
                 });
               }
             }}

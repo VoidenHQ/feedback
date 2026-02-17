@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, shell } from "electron";
+import { BrowserWindow, dialog, shell, MenuItemConstructorOptions } from "electron";
 
 import { ipcMain } from "electron";
 import path from "node:path";
@@ -21,14 +21,17 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
 
   ipcMain.on("show-file-context-menu", (event, data) => {
     let menu;
-    const appState = getAppState(event);
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
-    // Check if this is the root folder of the current project
+    // Explicit root hint from renderer. Falls back to previous inference for compatibility.
+    const appState = getAppState(event);
     const isRootFolder =
-      appState.activeDirectory === data.path || Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path);
+      data.isProjectRoot === true ||
+      (data.isProjectRoot === undefined &&
+        (appState.activeDirectory === data.path ||
+          Object.values(appState.directories || {}).some((dir) => dir.rootPath === data.path)));
 
     if (data.type === "folder") {
-      const menuTemplate = [
+      const menuTemplate: MenuItemConstructorOptions[] = [
         {
           label: "New Voiden file...",
           click: async () => {
@@ -61,15 +64,22 @@ export const createFileTreeContextMenu = (mainWindow: BrowserWindow) => {
             shell.showItemInFolder(data.path);
           },
         },
-        { type: "separator" as const },
-        {
-          label: "Close Project",
-          click: async () => {
-            senderWindow?.webContents.send("directory:close-project", {});
-          },
-        },
-        { type: "separator" as const },
       ];
+
+      if (isRootFolder) {
+        menuTemplate.push(
+          { type: "separator" as const },
+          {
+            label: "Close Project",
+            click: async () => {
+              senderWindow?.webContents.send("directory:close-project", {});
+            },
+          },
+          { type: "separator" as const },
+        );
+      } else {
+        menuTemplate.push({ type: "separator" as const });
+      }
 
       // Only add rename and delete options if not the root folder
       if (!isRootFolder) {
