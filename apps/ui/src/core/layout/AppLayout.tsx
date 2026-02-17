@@ -209,7 +209,9 @@ export const AppLayout = () => {
           <Panel {...leftPanelProps}>
             <div className="h-full border-border bg-bg">
               <SidePanelTabs side="left" />
-              <SidePanelContent side="left" />
+              <div className="h-[calc(100%-2rem)]">
+                <SidePanelContent side="left" />
+              </div>
             </div>
           </Panel>
 
