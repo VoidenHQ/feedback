@@ -15,14 +15,13 @@
  */
 
 import { PluginContext } from '@voiden/sdk/ui';
+import React from 'react';
 import { PostmanImportButton } from './components/PostmanImportButton';
 
-let _showToast: PluginContext['ui']['showToast'] | undefined;
-
-export const getShowToast = () => _showToast;
-
 const postmanImportPlugin = (context: PluginContext) => {
-  _showToast = context.ui.showToast;
+  const showToast = (context as any)?.ui?.showToast as
+    | ((message: string, type?: 'info' | 'success' | 'warning' | 'error') => void)
+    | undefined;
 
   return {
     onload: () => {
@@ -30,7 +29,11 @@ const postmanImportPlugin = (context: PluginContext) => {
       // Note: The component will use context.helpers.from('voiden-wrapper-api-extension')
       context.registerEditorAction({
         id: 'postman-import-button',
-        component: PostmanImportButton,
+        component: (props: any) =>
+          React.createElement(PostmanImportButton, {
+            ...props,
+            showToast,
+          }),
         predicate: (tab) => {
           // Only show for .json files
           return tab.title?.endsWith('.json') && tab.content?.indexOf('postman') > -1;
