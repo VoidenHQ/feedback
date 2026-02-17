@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { importPostmanCollection } from "../utils/converter";
-import { getShowToast } from "../main";
 import { X } from "lucide-react";
 
 interface PostmanImportButtonProps {
@@ -12,9 +11,10 @@ interface PostmanImportButtonProps {
     type: string;
     source?: string;
   };
+  showToast?: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-export const PostmanImportButton = ({ tab }: PostmanImportButtonProps) => {
+export const PostmanImportButton = ({ tab, showToast }: PostmanImportButtonProps) => {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export const PostmanImportButton = ({ tab }: PostmanImportButtonProps) => {
         setProgress({ current, total });
       }, (itemName, error) => {
         const message = error instanceof Error ? error.message : String(error);
-        getShowToast()?.(`Failed to import "${itemName}": ${message}`, 'error');
+        showToast?.(`Failed to import "${itemName}": ${message}`, 'error');
       });
 
       // Success - reset state
