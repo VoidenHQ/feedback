@@ -1,5 +1,6 @@
 import { JSONContent } from "@tiptap/core";
 import { useBlockContentStore } from "@/core/stores/blockContentStore";
+import { getQueryClient } from "@/main";
 
 /**
  * Recursively expands linkedBlock nodes in editor JSON to their actual content.
@@ -36,7 +37,18 @@ export async function expandLinkedBlocks(
 
       // If not in store, fetch it
       if (!blockContent && originalFile) {
-        blockContent = await window.electron?.voiden.getBlockContent(originalFile, blockUid);
+        const queryClient = getQueryClient();
+        const projects = queryClient.getQueryData<{
+          projects: { path: string; name: string }[];
+          activeProject: string;
+        }>(["projects"]);
+        const activeProject = projects?.activeProject;
+        const sourcePath = activeProject ? (await window.electron?.utils.pathJoin(activeProject, originalFile)) ?? originalFile : originalFile;
+        const fetchedContent = await window.electron?.voiden.getBlockContent(sourcePath);
+        if (typeof fetchedContent === "string") {
+          return json;
+        }
+        blockContent = fetchedContent;
 
         // Cache it for future use
         if (blockContent) {
@@ -44,7 +56,7 @@ export async function expandLinkedBlocks(
         }
       }
 
-      if (!blockContent) {
+      if (!blockContent || typeof blockContent !== "object") {
         // console.warn(`[expandLinkedBlocks] Could not resolve linkedBlock ${blockUid}`);
         return json;
       }

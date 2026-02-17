@@ -722,6 +722,13 @@ async function convertToRestApiRequestState(data: Request): Promise<RestApiReque
     }
   }
 
+  const yamlContentTypes = ["application/x-yaml", "application/yaml", "text/yaml", "text/x-yaml"];
+  const isYamlBody = yamlContentTypes.includes(data.content_type || "");
+  const normalizedBody =
+    isYamlBody && typeof data.body !== "string"
+      ? (data.body == null ? "" : String(data.body))
+      : data.body;
+
   const result = {
     method: data.method,
     url: data.url,
@@ -734,7 +741,7 @@ async function convertToRestApiRequestState(data: Request): Promise<RestApiReque
         value: p.value,
         enabled: p.enabled,
       })),
-    body: data.body,
+    body: normalizedBody,
     contentType: data.content_type,
     bodyParams: data.body_params?.map((p) => ({
       key: p.key,

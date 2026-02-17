@@ -6,6 +6,7 @@ import { addTab } from "./tabs";
 import { aggregateGitStatus } from "./git";
 import eventBus from "./eventBus";
 import { windowManager } from "./windowManager";
+import { getActiveProject } from "./state";
 
 // Files and Directory Operations
 const sortNodes = (nodes: TreeNode[]): TreeNode[] => {
@@ -67,6 +68,9 @@ export const buildFileTree = async (dir: string, gitStatusMap?: Map<string, any>
 };
 
 export async function createFile(filePath: string, fileName: string): Promise<{ path: string; name: string }> {
+  // Allow callers to pass nested/new paths by ensuring parent folders exist.
+  await fs.promises.mkdir(filePath, { recursive: true });
+
   let finalName = fileName;
   let counter = 1;
 
@@ -84,6 +88,9 @@ export async function createFile(filePath: string, fileName: string): Promise<{ 
 }
 
 export async function createVoidFile(filePath: string, fileName: string): Promise<{ path: string; name: string }> {
+  // Allow callers to pass nested/new paths by ensuring parent folders exist.
+  await fs.promises.mkdir(filePath, { recursive: true });
+
   let finalName = fileName.endsWith(".void") ? fileName : fileName + ".void";
   let counter = 1;
   // console.debug("create voiden files");
@@ -98,7 +105,7 @@ export async function createVoidFile(filePath: string, fileName: string): Promis
 
   const fullPath = path.join(filePath, finalName);
   await fs.promises.writeFile(fullPath, "");
-  windowManager.browserWindow?.webContents.send("files:tree:changed",null);
+  windowManager.browserWindow?.webContents.send("files:tree:changed", null);
   // eventBus.emitEvent("files:tree:changed",null);
   return { path: fullPath, name: finalName };
 }
@@ -124,6 +131,9 @@ export async function deleteFile(filePath: string) {
 }
 
 export async function createDirectory(parentPath: string, dirName: string = "untitled") {
+  // Ensure parent path exists for nested directory creation flows.
+  await fs.promises.mkdir(parentPath, { recursive: true });
+
   let finalName = dirName;
   let counter = 1;
 
@@ -151,7 +161,7 @@ export async function createProjectDirectory(dirName: string = "untitled") {
   let finalName = dirName;
   let counter = 1;
 
-  if(!fs.existsSync(path.join(app.getPath("home"), "Voiden"))){
+  if (!fs.existsSync(path.join(app.getPath("home"), "Voiden"))) {
     await fs.promises.mkdir(path.join(app.getPath("home"), "Voiden"));
   }
   // Check if directory exists and generate new name if needed
@@ -188,7 +198,7 @@ export async function deleteDirectory(dirPath: string) {
   if (response === 1) {
     // Unwatch the path first to release file handles on Windows
     // This prevents "permission denied" errors when file watcher is active
-    await fs.promises.rm(dirPath,{recursive:true,force:true});
+    await fs.promises.rm(dirPath, { recursive: true, force: true });
     return true;
   }
   return false;
@@ -271,20 +281,47 @@ export async function findVoidenProjects() {
   return result;
 }
 
-export async function dropFiles(targetPath: string, fileName: string, fileData: Uint8Array){
-  try{
+export async function dropFiles(targetPath: string, fileName: string, fileData: Uint8Array) {
+  try {
     const fullPath = path.join(targetPath, fileName);
     console.log(fullPath)
     await fs.promises.writeFile(fullPath, Buffer.from(fileData));
-  return { name: fileName, path: fullPath };
-  }catch (error) {
+    return { name: fileName, path: fullPath };
+  } catch (error) {
     return { success: false, error: error.message };
   }
-  
+
 }
 
 export async function moveFiles(dragIds: string[], parentId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const movedVoidFiles: Array<{ oldPath: string; newPath: string }> = [];
+
+    const collectMovedVoidFiles = async (oldBasePath: string, newBasePath: string) => {
+      const stat = await fs.promises.stat(oldBasePath);
+
+      if (stat.isFile()) {
+        if (oldBasePath.endsWith(".void")) {
+          movedVoidFiles.push({ oldPath: oldBasePath, newPath: newBasePath });
+        }
+        return;
+      }
+
+      if (!stat.isDirectory()) return;
+
+      const entries = await fs.promises.readdir(oldBasePath, { withFileTypes: true });
+      for (const entry of entries) {
+        const oldEntryPath = path.join(oldBasePath, entry.name);
+        const newEntryPath = path.join(newBasePath, entry.name);
+
+        if (entry.isDirectory()) {
+          await collectMovedVoidFiles(oldEntryPath, newEntryPath);
+        } else if (entry.isFile() && entry.name.endsWith(".void")) {
+          movedVoidFiles.push({ oldPath: oldEntryPath, newPath: newEntryPath });
+        }
+      }
+    };
+
     for (const dragId of dragIds) {
       const fileName = path.basename(dragId);
       const newPath = path.join(parentId, fileName);
@@ -294,11 +331,113 @@ export async function moveFiles(dragIds: string[], parentId: string): Promise<{ 
         return { success: false, error: `A file/folder with name "${fileName}" already exists in the target folder` };
       }
 
+      await collectMovedVoidFiles(dragId, newPath);
+
       await fs.promises.rename(dragId, newPath);
     }
+
+    await maybeUpdateLinkedBlockReferencesAfterMove(movedVoidFiles);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+}
+
+async function maybeUpdateLinkedBlockReferencesAfterMove(movedVoidFiles: Array<{ oldPath: string; newPath: string }>) {
+  if (movedVoidFiles.length === 0) return;
+
+  const activeProject = await getActiveProject();
+  if (!activeProject) return;
+
+  const normalizeRel = (projectRoot: string, absolutePath: string) => path.relative(projectRoot, absolutePath).replace(/\\/g, "/");
+  const normalizeRefPath = (value: string) => value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+  const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+  const movedByOldRel = new Map<string, string>();
+  for (const moved of movedVoidFiles) {
+    movedByOldRel.set(normalizeRel(activeProject, moved.oldPath), normalizeRel(activeProject, moved.newPath));
+  }
+  if (movedByOldRel.size === 0) return;
+
+  const allVoidFiles: string[] = [];
+  const collectAllVoidFiles = async (dir: string) => {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await collectAllVoidFiles(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(".void")) {
+        allVoidFiles.push(fullPath);
+      }
+    }
+  };
+  await collectAllVoidFiles(activeProject);
+
+  const originalFileLineRegex = /^(\s*originalFile:\s*)(['"]?)([^'"\r\n]+)\2(\s*)$/gm;
+  const linkedBlockFenceRegex = /```void\s*\r?\n([\s\S]*?)```/g;
+  const fileUpdates = new Map<string, string>();
+  let totalReferences = 0;
+
+  for (const voidFilePath of allVoidFiles) {
+    const source = await fs.promises.readFile(voidFilePath, "utf8");
+    let fileReferenceCount = 0;
+
+    const updatedSource = source.replace(linkedBlockFenceRegex, (fenceText, body: string) => {
+      if (!/^\s*type:\s*linkedBlock\s*$/m.test(body)) return fenceText;
+
+      const uidMatch = body.match(/^\s*blockUid:\s*([^\r\n]+)\s*$/m);
+      if (!uidMatch || !isUuid(uidMatch[1].trim())) return fenceText;
+
+      const updatedBody = body.replace(
+        originalFileLineRegex,
+        (lineText: string, prefix: string, quote: string, refValue: string, suffix: string) => {
+          const normalizedRef = normalizeRefPath(refValue.trim());
+          const newRel = movedByOldRel.get(normalizedRef);
+          if (!newRel) return lineText;
+
+          const keepBackslash = refValue.includes("\\");
+          const sep = keepBackslash ? "\\" : "/";
+          const relWithSep = newRel.replace(/\//g, sep);
+
+          let nextRefValue = relWithSep;
+          if (refValue.startsWith("./") || refValue.startsWith(".\\")) {
+            nextRefValue = `.${sep}${relWithSep}`;
+          } else if (refValue.startsWith("/") || refValue.startsWith("\\")) {
+            nextRefValue = `${sep}${relWithSep}`;
+          }
+
+          fileReferenceCount += 1;
+          return `${prefix}${quote}${nextRefValue}${quote}${suffix}`;
+        },
+      );
+
+      return fenceText.replace(body, updatedBody);
+    });
+
+    if (fileReferenceCount > 0 && updatedSource !== source) {
+      totalReferences += fileReferenceCount;
+      fileUpdates.set(voidFilePath, updatedSource);
+    }
+  }
+
+  if (fileUpdates.size === 0) return;
+
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  const { response } = await dialog.showMessageBox(focusedWindow ?? undefined, {
+    type: "question",
+    buttons: ["Keep current references", "Update references"],
+    defaultId: 1,
+    cancelId: 0,
+    title: "Update References?",
+    message: "A .void file was moved.",
+    detail: `Linked blocks in other file(s) still reference the old path. Found ${totalReferences} reference(s) in ${fileUpdates.size} file(s). Update them to the new location?`,
+  });
+
+
+  if (response !== 1) return;
+
+  for (const [filePath, content] of fileUpdates) {
+    await fs.promises.writeFile(filePath, content, "utf8");
   }
 }
 

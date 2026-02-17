@@ -16,16 +16,42 @@ export const SidePanelContent = ({ side }: { side: "left" | "right" }) => {
   const { data: sidebarTabs } = useGetSidebarTabs(side);
   const pluginTabs = usePluginStore((state) => state.sidebar[side]);
 
-  if (!sidebarTabs?.activeTabId) return null;
+  const activeTabId = sidebarTabs?.activeTabId;
+  const activeTab = sidebarTabs?.tabs?.find((t: any) => t.id === activeTabId);
+  const activeType = activeTab?.type;
 
-  const activeTab = sidebarTabs.tabs.find((tab) => tab.id === sidebarTabs.activeTabId);
-  if (!activeTab) return null;
+  // Response panel is always mounted so its shortcuts remain active.
+  const isResponseActive = activeType === 'responsePanel';
 
-  if (activeTab.type === "custom") {
-    const extensionTab = pluginTabs.find((t) => t.id === activeTab.meta.customTabKey);
-    const Component = extensionTab?.content || extensionTab?.component;
-    return Component ? <div className="h-full"><Component /></div> : null;
-  }
+  return (
+    <>
+      {/* Response panel: always mounted, visibility toggled */}
+      <div className="h-full bg-bg" style={{ display: isResponseActive ? undefined : 'none' }}>
+        <ResponsePanelContainer />
+      </div>
 
-  return <div className="h-[calc(100%-2rem)]  bg-bg">{sidebarComponentMap[activeTab.type] || null}</div>;
+      {/* Other built-in tabs: only the active one renders */}
+      {activeTab && activeType !== 'responsePanel' && activeType !== 'custom' && sidebarComponentMap[activeType] && (
+        <div className="h-full bg-bg">
+          {sidebarComponentMap[activeType]}
+        </div>
+      )}
+
+      {/* Custom (plugin) tabs */}
+      {(pluginTabs || []).map((extensionTab: any) => {
+        const matchingTab = sidebarTabs?.tabs?.find(
+          (t: any) => t.type === 'custom' && t.meta?.customTabKey === extensionTab.id
+        );
+        if (!matchingTab) return null;
+        const isActive = matchingTab.id === activeTabId;
+        const Component = extensionTab.content || extensionTab.component;
+        if (!Component) return null;
+        return (
+          <div key={extensionTab.id} className="h-full" style={{ display: isActive ? undefined : 'none' }}>
+            <Component />
+          </div>
+        );
+      })}
+    </>
+  );
 };

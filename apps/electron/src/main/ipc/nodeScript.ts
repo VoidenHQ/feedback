@@ -1,0 +1,208 @@
+/**
+ * Node.js Script Executor
+ *
+ * IPC handler that executes JavaScript scripts via Node.js subprocess
+ * using worker_threads. The worker host wrapper + workerSource are
+ * provided by the renderer scripting engine so main-process execution
+ * stays generic and not tied to a single hardcoded wrapper.
+ *
+ * The outer Node process acts as the RPC host — handling env:get,
+ * variables:get, variables:set messages — exactly as the browser
+ * renderer does for Web Workers. `require()` is available inside
+ * the worker thread so users can import installed npm packages.
+ */
+
+import { ipcMain } from "electron";
+import { spawn, execFile } from "child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { getActiveProject } from "../state";
+
+const NODE_TIMEOUT_MS = 10_000;
+
+let cachedNodePath: string | null = null;
+
+/**
+ * Detect available Node.js binary.
+ */
+async function detectNodePath(): Promise<string | null> {
+  if (cachedNodePath) return cachedNodePath;
+
+  const whichCmd = process.platform === "win32" ? "where" : "which";
+  const candidates = ["node"];
+
+  for (const candidate of candidates) {
+    try {
+      const result = await new Promise<string | null>((resolve) => {
+        execFile(whichCmd, [candidate], { timeout: 3000 }, (error, stdout) => {
+          if (error || !stdout.trim()) {
+            resolve(null);
+          } else {
+            resolve(stdout.trim().split(/\r?\n/)[0]);
+          }
+        });
+      });
+      if (result) {
+        cachedNodePath = result;
+        return result;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+interface NodeScriptPayload {
+  scriptBody: string;
+  nodeHostWrapper: string;
+  workerSource: string;
+  request: any;
+  response?: any;
+  envVars: Record<string, string>;
+  variables: Record<string, any>;
+}
+
+interface NodeScriptResult {
+  success: boolean;
+  logs: Array<{ level: string; args: any[] }>;
+  error?: string;
+  cancelled: boolean;
+  exitCode?: number;
+  modifiedRequest?: any;
+  modifiedResponse?: any;
+  modifiedVariables?: Record<string, any>;
+}
+
+async function loadProjectVariables(): Promise<Record<string, any>> {
+  try {
+    const project = await getActiveProject();
+    if (!project) return {};
+    const filePath = path.join(project, ".voiden", ".process.env.json");
+    const content = await fs.readFile(filePath, "utf-8");
+    const parsed = JSON.parse(content);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function persistProjectVariables(next: Record<string, any>): Promise<void> {
+  try {
+    const project = await getActiveProject();
+    if (!project) return;
+    const dirPath = path.join(project, ".voiden");
+    await fs.mkdir(dirPath, { recursive: true });
+    const filePath = path.join(dirPath, ".process.env.json");
+    await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf-8");
+  } catch {
+    // Best-effort persistence
+  }
+}
+
+export function registerNodeScriptIpcHandler() {
+  ipcMain.handle(
+    "script:executeNode",
+    async (_event, payload: NodeScriptPayload): Promise<NodeScriptResult> => {
+      const nodePath = await detectNodePath();
+      if (!nodePath) {
+        return {
+          success: false,
+          logs: [],
+          error:
+            "Node.js not found. Ensure node is in your PATH.",
+          cancelled: false,
+          exitCode: -1,
+        };
+      }
+
+      const projectPath = await getActiveProject();
+      const nodeHostWrapper = payload.nodeHostWrapper?.trim();
+      if (!nodeHostWrapper) {
+        return {
+          success: false,
+          logs: [],
+          error: "Node host wrapper source missing from renderer payload.",
+          cancelled: false,
+          exitCode: -1,
+        };
+      }
+      const baseVariables = await loadProjectVariables();
+      const mergedPayload: NodeScriptPayload = {
+        ...payload,
+        variables: {
+          ...baseVariables,
+          ...(payload.variables || {}),
+        },
+      };
+
+      return new Promise<NodeScriptResult>((resolve) => {
+        const child = spawn(nodePath, ["-e", nodeHostWrapper], {
+          timeout: NODE_TIMEOUT_MS,
+          stdio: ["pipe", "pipe", "pipe"],
+          cwd: projectPath || undefined,
+        });
+
+        let stdout = "";
+        let stderr = "";
+
+        child.stdout.on("data", (data: Buffer) => {
+          stdout += data.toString();
+        });
+        child.stderr.on("data", (data: Buffer) => {
+          stderr += data.toString();
+        });
+
+        child.on("close", async (code) => {
+          const exitCode = code ?? -1;
+          if (code !== 0 && !stdout) {
+            resolve({
+              success: false,
+              logs: [],
+              error: stderr || `Node.js exited with code ${code}`,
+              cancelled: false,
+              exitCode,
+            });
+            return;
+          }
+          try {
+            const lines = stdout.split(/\r?\n/).filter((l) => l.trim().length > 0);
+            const jsonLine = lines.length > 0 ? lines[lines.length - 1] : stdout;
+            const result = JSON.parse(jsonLine) as NodeScriptResult;
+            const normalizedExitCode = result.success === false && exitCode === 0 ? 1 : exitCode;
+            result.exitCode = normalizedExitCode;
+
+            if (result.modifiedVariables && Object.keys(result.modifiedVariables).length > 0) {
+              const current = await loadProjectVariables();
+              const merged = { ...current, ...result.modifiedVariables };
+              await persistProjectVariables(merged);
+            }
+            resolve(result);
+          } catch {
+            resolve({
+              success: false,
+              logs: [],
+              error: `Failed to parse Node.js output: ${stdout.slice(0, 500)}`,
+              cancelled: false,
+              exitCode,
+            });
+          }
+        });
+
+        child.on("error", (err) => {
+          resolve({
+            success: false,
+            logs: [],
+            error: `Failed to spawn Node.js: ${err.message}`,
+            cancelled: false,
+            exitCode: -1,
+          });
+        });
+
+        child.stdin.write(JSON.stringify(mergedPayload));
+        child.stdin.end();
+      });
+    }
+  );
+}

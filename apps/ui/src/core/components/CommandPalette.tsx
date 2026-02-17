@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, File, Folder, FilePlus, Terminal, Settings, FolderPlus, HelpCircle, Sparkles } from 'lucide-react';
 import { useAddPanelTab } from '@/core/layout/hooks';
 import { cn } from '@/core/lib/utils';
@@ -55,7 +55,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
   const queryClient = useQueryClient();
   const { openBottomPanel, bottomPanelRef } = usePanelStore();
   const { data: activeFilePath } = useGetActiveDocument();
-  const codeMirrorEditor = useCodeEditorStore((state) => state.activeEditor.editor);
 
   // Prettify utilities
   const prettifyXML = (xml: string): string => {
@@ -89,7 +88,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
         .split('\n')
         .map(line => {
           const trimmed = line.trim();
-          if (trimmed.match(/^<\//) && !trimmed.match(/^<\//)) indent--;
+          if (trimmed.match(/^<\//)) indent--;
           const indented = '  '.repeat(Math.max(0, indent)) + trimmed;
           if (trimmed.match(/^<\w[^>]*[^\/]>$/) || trimmed.match(/^<\w[^>]*>$/)) {
             if (!trimmed.match(/<\w[^>]*\/>/)) indent++;
@@ -103,7 +102,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
   };
 
   const handlePrettify = (type: 'json' | 'xml' | 'html') => {
-    const editor = codeMirrorEditor;
+    const editor = useCodeEditorStore.getState().activeEditor.editor;
     if (!editor) {
       console.warn('[CommandPalette] No active CodeMirror editor found');
       return;
@@ -254,7 +253,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
   }, [createFilePath, folders, isCreatingFile, isCreatingFolder]);
 
   // Define available commands
-  const commands: Command[] = [
+  const commands: Command[] = useMemo(() => [
     {
       id: 'create-voiden-file',
       label: 'Create New Voiden File',
@@ -455,7 +454,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
         setTimeout(() => onBlur(), 0);
       },
     },
-  ];
+  ], [addPanelTab, bottomPanelRef, openBottomPanel, queryClient, onBlur, onShowHelp, activeFilePath]);
 
   const [filteredCommands, setFilteredCommands] = useState<Command[]>(commands);
 
@@ -477,7 +476,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
 
     setFilteredCommands(filtered);
     setSelectedIndex(0);
-  }, [searchQuery, mode]);
+  }, [searchQuery, mode, commands]);
 
   // Flatten file tree when it changes
   useEffect(() => {
@@ -671,31 +670,43 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
 
   const handleCreateFolder = async () => {
     const projectPath = activeDirectory || fileTree?.path;
-    if (!projectPath || !createFilePath.trim() || isCreating) return;
+    const rawInputPath = createFilePath.trim();
+    if (!projectPath || !rawInputPath || isCreating) return;
 
     setIsCreating(true);
 
     try {
+      const normalizedPath = rawInputPath
+        .replace(/\\/g, '/')
+        .replace(/^\.?\//, '')
+        .replace(/\/+/g, '/')
+        .replace(/\/$/, '');
+
       // Parse the path - extract parent folder and new folder name
-      const lastSlashIndex = createFilePath.lastIndexOf('/');
+      const lastSlashIndex = normalizedPath.lastIndexOf('/');
       let parentPath: string;
       let folderName: string;
 
       if (lastSlashIndex === -1) {
         // No slash - creating folder in project root
         parentPath = projectPath;
-        folderName = createFilePath;
+        folderName = normalizedPath;
       } else {
         // Has slash - extract parent path and folder name
-        const relativePath = createFilePath.substring(0, lastSlashIndex);
+        const relativePath = normalizedPath.substring(0, lastSlashIndex);
         parentPath = `${projectPath}/${relativePath}`;
-        folderName = createFilePath.substring(lastSlashIndex + 1);
+        folderName = normalizedPath.substring(lastSlashIndex + 1);
       }
 
-      const result = await window.electron?.files.createDirectory(parentPath, folderName);
+      if (!folderName) {
+        setIsCreating(false);
+        return;
+      }
+
+      await window.electron?.files.createDirectory(parentPath, folderName);
 
       // Invalidate file tree to refresh
-      await queryClient.invalidateQueries({ queryKey: ['fileTree'] });
+      await queryClient.invalidateQueries({ queryKey: ['files:tree'] });
 
       // Reset and close
       setIsCreatingFolder(false);
@@ -711,25 +722,37 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
 
   const handleCreateFile = async () => {
     const projectPath = activeDirectory || fileTree?.path;
-    if (!projectPath || !createFilePath.trim() || isCreating) return;
+    const rawInputPath = createFilePath.trim();
+    if (!projectPath || !rawInputPath || isCreating) return;
 
     setIsCreating(true);
 
     try {
+      const normalizedPath = rawInputPath
+        .replace(/\\/g, '/')
+        .replace(/^\.?\//, '')
+        .replace(/\/+/g, '/')
+        .replace(/\/$/, '');
+
       // Parse the path - extract folder and filename
-      const lastSlashIndex = createFilePath.lastIndexOf('/');
+      const lastSlashIndex = normalizedPath.lastIndexOf('/');
       let folderPath: string;
       let fileName: string;
 
       if (lastSlashIndex >= 0) {
         // Has a folder path
-        const relativeFolderPath = createFilePath.substring(0, lastSlashIndex);
-        fileName = createFilePath.substring(lastSlashIndex + 1);
+        const relativeFolderPath = normalizedPath.substring(0, lastSlashIndex);
+        fileName = normalizedPath.substring(lastSlashIndex + 1);
         folderPath = relativeFolderPath ? `${projectPath}/${relativeFolderPath}` : projectPath;
       } else {
         // No folder path, create in root
         folderPath = projectPath;
-        fileName = createFilePath;
+        fileName = normalizedPath;
+      }
+
+      if (!fileName) {
+        setIsCreating(false);
+        return;
       }
 
       // Handle extension based on file type
@@ -748,6 +771,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isFocused, mode,
       const result = createFileType === 'void'
         ? await window.electron?.files.createVoid(folderPath, fileName)
         : await window.electron?.files.create(folderPath, fileName);
+
+      await queryClient.invalidateQueries({ queryKey: ['files:tree'] });
 
       if (result?.path) {
         // Open the newly created file

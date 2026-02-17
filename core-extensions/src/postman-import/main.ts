@@ -17,7 +17,13 @@
 import { PluginContext } from '@voiden/sdk/ui';
 import { PostmanImportButton } from './components/PostmanImportButton';
 
+let _showToast: PluginContext['ui']['showToast'] | undefined;
+
+export const getShowToast = () => _showToast;
+
 const postmanImportPlugin = (context: PluginContext) => {
+  _showToast = context.ui.showToast;
+
   return {
     onload: () => {
       // Register the import button as an editor action

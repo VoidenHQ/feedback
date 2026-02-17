@@ -127,6 +127,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
       const { createMethodNode } = await import('./nodes/MethodNode');
       const { createJsonNode } = await import('./nodes/JsonNode');
       const { createXMLNode } = await import('./nodes/XMLNode');
+      const { createYmlNode } = await import('./nodes/YmlNode');
       const { UrlNode } = await import('./nodes/UrlNode');
       const {
         RequestNode,
@@ -144,6 +145,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
 
       const JsonNode = createJsonNode(NodeViewWrapper, CodeEditor, RequestBlockHeader, context.project.openFile);
       const XMLNode = createXMLNode(NodeViewWrapper, CodeEditor, RequestBlockHeader, context.project.openFile);
+      const YmlNode = createYmlNode(NodeViewWrapper, CodeEditor, RequestBlockHeader, context.project.openFile);
       const MethodNode = createMethodNode(useSendRestRequest);
       const RestFile = createRestFileNode(NodeViewWrapper, RequestBlockHeader, context.project.openFile);
 
@@ -165,6 +167,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
       context.registerVoidenExtension(MultipartTableNodeView);
       context.registerVoidenExtension(JsonNode);
       context.registerVoidenExtension(XMLNode);
+      context.registerVoidenExtension(YmlNode);
       context.registerVoidenExtension(RestFile);
 
       // Create and register response nodes using local implementations with context components
@@ -194,6 +197,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
         'multipart-table',
         'json_body',
         'xml_body',
+        'yml_body',
         'restFile',
         'response-body',
         'response-headers',
@@ -218,6 +222,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
         'response-headers': 'Response Headers',
         'request-headers': 'Request Headers',
         'xml_body': 'XML Body',
+        'yml_body': 'YAML Body',
       });
 
 
@@ -352,6 +357,8 @@ const voidenRestApiPlugin = (context: PluginContext) => {
         convertToHeadersTableNode,
         convertToQueryTableNode,
         convertToJsonNode,
+        convertToXMLNode,
+        convertToYmlNode,
         convertToMultipartTableNode,
         findAndReplaceOrAddNode,
         insertParagraphAfterRequestBlocks,
@@ -443,7 +450,7 @@ const voidenRestApiPlugin = (context: PluginContext) => {
 
               // Populate editor with cURL request
               updateEditorContent(editor, (editorJsonContent) => {
-                const requestBlocks = ["headers-table", "query-table", "url-table", "multipart-table", "json_body"];
+                const requestBlocks = ["headers-table", "query-table", "url-table", "multipart-table", "json_body", "xml_body", "yml_body"];
 
                 // Step 1: Clean up existing request nodes
                 editorJsonContent = editorJsonContent.filter((node: any) => {
@@ -507,6 +514,18 @@ const voidenRestApiPlugin = (context: PluginContext) => {
                       editorJsonContent,
                       "multipart-table",
                       convertToMultipartTableNode(tableData)
+                    );
+                  } else if (["application/xml", "text/xml"].includes(request.body.mimeType || "") && request.body.text) {
+                    editorJsonContent = findAndReplaceOrAddNode(
+                      editorJsonContent,
+                      "xml_body",
+                      convertToXMLNode(request.body.text, request.body.mimeType || "application/xml")
+                    );
+                  } else if (["application/x-yaml", "text/yaml", "text/x-yaml", "application/yaml"].includes(request.body.mimeType || "") && request.body.text) {
+                    editorJsonContent = findAndReplaceOrAddNode(
+                      editorJsonContent,
+                      "yml_body",
+                      convertToYmlNode(request.body.text, request.body.mimeType || "application/x-yaml")
                     );
                   } else if (["application/json", "application/hal+json", "text/plain"].includes(request.body.mimeType || "") && request.body.text) {
                     const contentType = request.body.mimeType && ["application/json", "application/hal+json"].includes(request.body.mimeType) ? "json" : "text";

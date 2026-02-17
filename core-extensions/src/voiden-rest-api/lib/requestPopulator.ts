@@ -271,6 +271,13 @@ export function getRequestFromEditor(editor: Editor) {
     contentType = 'application/xml';
   }
 
+  // Check for YAML body
+  const ymlBodyNode = json.content.find((node: JSONContent) => node.type === 'yml_body');
+  if (ymlBodyNode?.attrs?.body) {
+    body = ymlBodyNode.attrs.body;
+    contentType = 'application/x-yaml';
+  }
+
   // Check for multipart form data
   const hasMultipartTable = json.content.some((node: JSONContent) => node.type === 'multipart-table');
   if (hasMultipartTable) {

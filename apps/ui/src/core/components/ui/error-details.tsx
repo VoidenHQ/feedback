@@ -1,6 +1,6 @@
 import React, { FC } from "react";
 import { useStore } from "@/store";
-import { toast } from "sonner";
+import { toast } from "@/core/components/ui/sonner";
 import { LuAlertCircle } from "react-icons/lu";
 
 const ErrorDetails: FC<{ message: string }> = ({ message }) => {

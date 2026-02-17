@@ -2,7 +2,7 @@
   "id": "postman-import",
   "name": "Postman Collection Importer",
   "description": "Seamlessly migrate from Postman by importing v2.1 collections and automatically converting them to native Voiden request files with full support for nested folders, environment variables, headers, auth, and all request body types",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "author": "Voiden Team",
   "enabled": true,
   "priority": 50,

@@ -5,7 +5,7 @@ import { Command } from "cmdk";
 import { useEffect, useState, useRef } from "react";
 import { useCheckoutBranch, useGetGitBranches, useCreateBranch } from "@/core/git/hooks";
 import { useGetProjects } from "@/core/projects/hooks";
-import { toast } from "sonner";
+import { toast } from "@/core/components/ui/sonner";
 import { Kbd } from "@/core/components/ui/kbd";
 
 export const GitBranchesList = () => {

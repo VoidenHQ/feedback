@@ -132,7 +132,7 @@ export const MainEditor = ({ bottomPanelProps, rightPanelProps }: MainEditorProp
         <Panel {...rightPanelProps}>
           <div className="h-full border-border bg-panel">
             <SidePanelTabs side="right" />
-            <div className="h-full">
+            <div className="h-[calc(100%-2rem)]">
               <SidePanelContent side="right" />
             </div>
           </div>

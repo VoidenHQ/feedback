@@ -356,6 +356,29 @@ export const convert: Converter = (rawData) => {
   // Windows uses ^ to escape special characters
   let processedData = rawData;
 
+  // Normalize bash-style line continuations (`\` + newline), including accidental trailing spaces.
+  // Example:
+  // curl ... \n
+  //   -H ...
+  processedData = processedData.replace(/\\\s*\r?\n\s*/g, " ");
+
+  // If a --data* payload starts a single-quoted body but misses the closing quote,
+  // recover by appending a closing quote at end-of-command.
+  const startsSingleQuotedData = /--data(?:-raw|-urlencode|-binary|-ascii)?\s+\$*'[\s\S]*$/m.test(processedData);
+  const countUnescapedSingleQuotes = (text: string) => {
+    let count = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "'" && text[i - 1] !== "\\") {
+        count += 1;
+      }
+    }
+    return count;
+  };
+  const singleQuoteCount = countUnescapedSingleQuotes(processedData);
+  if (startsSingleQuotedData && singleQuoteCount % 2 !== 0) {
+    processedData += "'";
+  }
+
   // Detect if this is a Windows CMD curl vs bash curl
   // Windows CMD curl has specific patterns:
   // - ^" (escaped quotes) at the beginning of arguments
