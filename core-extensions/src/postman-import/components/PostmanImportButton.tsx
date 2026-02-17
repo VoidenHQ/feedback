@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { importPostmanCollection } from "../utils/converter";
+import { getShowToast } from "../main";
 import { X } from "lucide-react";
 
 interface PostmanImportButtonProps {
@@ -77,6 +78,9 @@ export const PostmanImportButton = ({ tab }: PostmanImportButtonProps) => {
 
       await importPostmanCollection(tab.content, activeProject, (current, total) => {
         setProgress({ current, total });
+      }, (itemName, error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        getShowToast()?.(`Failed to import "${itemName}": ${message}`, 'error');
       });
 
       // Success - reset state
