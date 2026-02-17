@@ -107,6 +107,18 @@ export class VoidenRestApiExtension extends UIExtension {
           return;
         }
 
+        // Check for YAML body node
+        const ymlBodyNode = json.content.find((node: any) => node.type === 'yml_body');
+        if (ymlBodyNode) {
+          const hasContentType = context.requestState.headers.some(
+            h => h.key.toLowerCase() === 'content-type'
+          );
+          if (!hasContentType) {
+            addHeader('Content-Type', 'application/x-yaml');
+          }
+          return;
+        }
+
         // Check for multipart form data
         const hasMultipartTable = json.content.some((node: any) => node.type === 'multipart-table');
         if (hasMultipartTable) {

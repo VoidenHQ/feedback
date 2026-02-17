@@ -166,6 +166,34 @@ export const restApiSlashGroup: SlashCommandGroup = {
       },
     },
     {
+      name: "yml",
+      label: "YAML",
+      aliases: ["yaml"],
+      slash: "/yml",
+      singleton: true,
+      compareKeys: ["yml_body"],
+      description: "Insert a YAML node",
+      action: (editor) => {
+        const range = {
+          from: editor.state.selection.$from.pos,
+          to: editor.state.selection.$to.pos,
+        };
+        const existingNodes = editor.$nodes("yml_body");
+        const existingNode = existingNodes?.find((node) => !node.attributes.importedFrom);
+        if (existingNode) {
+          editor.chain().focus(existingNode.pos).deleteRange(range).run();
+        } else {
+          editor.storage.yml_body.shouldFocusNext = true;
+          editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent([{ type: "yml_body" }])
+            .run();
+        }
+      },
+    },
+    {
       name: "path-table",
       label: "Path Params",
       slash: "/path-params",

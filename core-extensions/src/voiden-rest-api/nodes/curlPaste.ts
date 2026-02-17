@@ -27,6 +27,7 @@ import {
   convertToHeadersTableNode,
   convertToJsonNode,
   convertToXMLNode,
+  convertToYmlNode,
   convertToMethodNode,
   convertToMultipartTableNode,
   convertToQueryTableNode,
@@ -181,7 +182,7 @@ function insertParagraphNodes(view: EditorView, lines: string[]): void {
  */
 export const pasteCurl = (editor: Editor, request: ImportRequest) => {
   updateEditorContent(editor, (editorJsonContent) => {
-    const requestBlocks = ["headers-table", "query-table", "url-table", "multipart-table", "json_body", "xml_body"];
+    const requestBlocks = ["headers-table", "query-table", "url-table", "multipart-table", "json_body", "xml_body", "yml_body"];
 
     // Step 1: Clean up existing request nodes
     // Remove orphaned method/url nodes and request blocks that should be nested
@@ -256,6 +257,16 @@ export const pasteCurl = (editor: Editor, request: ImportRequest) => {
         });
 
         editorJsonContent = findAndReplaceOrAddNode(editorJsonContent, "multipart-table", convertToMultipartTableNode(tableData));
+      }
+      // Handle YAML body
+      else if (["application/x-yaml", "text/yaml", "text/x-yaml", "application/yaml"].includes(request.body.mimeType || "") && request.body.text) {
+        const bodyText = request.body.text;
+
+        editorJsonContent = findAndReplaceOrAddNode(
+          editorJsonContent,
+          "yml_body",
+          convertToYmlNode(bodyText, request.body.mimeType || "application/x-yaml")
+        );
       }
       // Handle XML body
       else if (["application/xml", "text/xml"].includes(request.body.mimeType || "") && request.body.text) {
