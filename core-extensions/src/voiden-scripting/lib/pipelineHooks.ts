@@ -92,6 +92,15 @@ function formatScriptRuntimeError(rawError: unknown, scriptBody: string, languag
   return firstLine;
 }
 
+function didScriptChangePayload(before: any, after: any): boolean {
+  try {
+    return JSON.stringify(before) !== JSON.stringify(after);
+  } catch {
+    // If serialization fails, be safe and treat as changed.
+    return true;
+  }
+}
+
 /**
  * Pre-processing hook: Capture editor document with expanded linked blocks.
  * Checks if already set by another extension (e.g. simple-assertions) to avoid overwriting.
@@ -246,6 +255,7 @@ export async function postProcessScriptHook(context: any): Promise<void> {
 
   const vdRequest = buildVdRequest(requestState);
   const vdResponse = buildVdResponse(responseState);
+  const vdResponseBeforeScript = JSON.parse(JSON.stringify(vdResponse));
   const variablesApi = buildVariablesApi();
   const envApi = buildEnvApi();
 
@@ -261,7 +271,11 @@ export async function postProcessScriptHook(context: any): Promise<void> {
   const result = await executeScript(scriptBody, vdApi, language);
 
   // Apply response modifications back to pipeline state
-  if (result.success && result.modifiedResponse) {
+  if (
+    result.success &&
+    result.modifiedResponse &&
+    didScriptChangePayload(vdResponseBeforeScript, result.modifiedResponse)
+  ) {
     applyVdResponseToState(result.modifiedResponse, responseState);
   }
 

@@ -463,13 +463,14 @@ def main():
     _REQUEST_COLLECTION_FIELDS = {"headers", "queryParams", "pathParams"}
 
     class _Obj:
-        def __init__(self, data):
+        def __init__(self, data, normalize_request_collections=False):
+            object.__setattr__(self, "_normalize_request_collections", bool(normalize_request_collections))
             for k, v in data.items():
                 setattr(self, k, v)
 
         def __setattr__(self, key, value):
             # Keep request collections list-like in Python so .push()/.append() work.
-            if key in _REQUEST_COLLECTION_FIELDS:
+            if getattr(self, "_normalize_request_collections", False) and key in _REQUEST_COLLECTION_FIELDS:
                 normalized = _normalize_kv_collection(value)
                 object.__setattr__(self, key, _List(normalized))
                 return
@@ -546,7 +547,7 @@ def main():
 
     class _Vd:
         def __init__(self):
-            self.request = _Obj(request_data)
+            self.request = _Obj(request_data, True)
             self.response = _Obj(response_data) if response_data else None
             self.env = _Env()
             self.variables = _Variables()
@@ -595,7 +596,7 @@ def main():
         if isinstance(val, _List):
             return [_serialize(v) for v in val]
         if isinstance(val, _Obj):
-            return {k: _serialize(v) for k, v in val.__dict__.items()}
+            return {k: _serialize(v) for k, v in val.__dict__.items() if not str(k).startswith("_")}
         if isinstance(val, dict):
             return {k: _serialize(v) for k, v in val.items()}
         if isinstance(val, (list, tuple)):
