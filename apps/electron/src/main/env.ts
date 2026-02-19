@@ -99,11 +99,11 @@ function getEnvHierarchy(activeEnvPath: string): string[] {
   const parts = path.basename(activeEnvPath).split(".");
   const hierarchy: string[] = [];
   let currentName = "";
-  let i = 1; // skipping parts[0], which is empty due to leading dot
-  do {
+  // skipping parts[0], which is empty due to leading dot
+  for (let i = 1; i < parts.length; i++) {
     currentName += "." + parts[i];
     hierarchy.push(path.join(dir, currentName));
-  } while(i++ < parts.length);
+  }
   return hierarchy.sort((a, b) => a.length - b.length);
 }
 
