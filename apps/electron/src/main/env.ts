@@ -51,7 +51,7 @@ async function findEnvFilesRecursively(dir: string) {
       // Recursively search in subdirectory
       const subDirEnvFiles = await findEnvFilesRecursively(fullPath);
       envFiles = envFiles.concat(subDirEnvFiles);
-    } else if (entry.isFile() && (entry.name.startsWith(".env") || entry.name.endsWith(".env"))) {
+    } else if (entry.isFile() && entry.name.startsWith(".env")) {
       envFiles.push(fullPath);
     }
   }
