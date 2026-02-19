@@ -51,7 +51,7 @@ async function findEnvFilesRecursively(dir: string) {
       // Recursively search in subdirectory
       const subDirEnvFiles = await findEnvFilesRecursively(fullPath);
       envFiles = envFiles.concat(subDirEnvFiles);
-    } else if (entry.isFile() && (entry.name.startsWith(".env") || entry.name.endsWith(".env"))) {
+    } else if (entry.isFile() && entry.name.startsWith(".env")) {
       envFiles.push(fullPath);
     }
   }
@@ -89,6 +89,24 @@ async function loadProjectEnv(projectPath: string) {
   return envData;
 }
 
+/**
+ * Get the hierarchy of .env files for a given active environment.
+ * For example, if activeEnv is "/path/to/project/.env.foo.bar",
+ * it returns, in order, ["/path/to/project/.env", "/path/to/project/.env.foo", "/path/to/project/.env.foo.bar"]
+ */
+function getEnvHierarchy(activeEnvPath: string): string[] {
+  const dir = path.dirname(activeEnvPath);
+  const parts = path.basename(activeEnvPath).split(".");
+  const hierarchy: string[] = [];
+  let currentName = "";
+  // skipping parts[0], which is empty due to leading dot
+  for (let i = 1; i < parts.length; i++) {
+    currentName += "." + parts[i];
+    hierarchy.push(path.join(dir, currentName));
+  }
+  return hierarchy.sort((a, b) => a.length - b.length);
+}
+
 ipcMain.handle("env:load", async (event:IpcMainInvokeEvent) => {
   const appState = getAppState(event);
   const activeProject = await getActiveProject(event);
@@ -96,15 +114,15 @@ ipcMain.handle("env:load", async (event:IpcMainInvokeEvent) => {
   let activeEnv = appState.directories[activeProject].activeEnv;
   if (!activeProject) return {};
   const envs = await loadProjectEnv(activeProject);
-  if (!envs[activeEnv]) {
+  if (activeEnv && !envs[activeEnv]) {
     activeEnv = null;
   }
 
-  // Merge base .env with other environment files if hierarchy is enabled
-  const settings = getSettings();
-  if (settings.environment.use_hierarchy && activeEnv) {
-    const baseEnv = envs[path.join(activeProject, ".env")] || {};
-    envs[activeEnv] = {...baseEnv, ...envs[activeEnv]};
+  // Merge environment hierarchy if enabled
+  if (getSettings().environment.use_hierarchy && activeEnv) {
+    envs[activeEnv] = getEnvHierarchy(activeEnv).reduce((acc, envKey) => {
+      return envs[envKey] ? { ...acc, ...envs[envKey] } : acc;
+    }, {} as Record<string, string>);
   }
 
   return {
@@ -142,13 +160,13 @@ export async function replaceVariablesSecure(text: string, projectPath: string):
     return text;
   }
 
-  // Merge base .env with active env if hierarchy is enabled
-  const settings = getSettings();
   let env = envData[activeEnvPath];
 
-  if (settings.environment.use_hierarchy) {
-    const baseEnv = envData[path.join(projectPath, ".env")] || {};
-    env = {...baseEnv, ...env};
+  // Merge environment hierarchy if enabled
+  if (getSettings().environment.use_hierarchy && activeEnvPath) {
+    env = getEnvHierarchy(activeEnvPath).reduce((acc, envKey) => {
+      return envData[envKey] ? { ...acc, ...envData[envKey] } : acc;
+    }, {} as Record<string, string>);
   }
 
   // Replace {{VAR_NAME}} patterns
@@ -214,17 +232,14 @@ ipcMain.handle("env:getKeys", async (event:IpcMainInvokeEvent) => {
     return [];
   }
 
-  // Merge base .env keys with active env keys if hierarchy is enabled
-  const settings = getSettings();
-  let keys = Object.keys(envData[activeEnvPath]);
-
-  if (settings.environment.use_hierarchy) {
-    const baseEnvPath = path.join(activeProject, ".env");
-    const baseKeys = envData[baseEnvPath] ? Object.keys(envData[baseEnvPath]) : [];
-    // Merge keys, removing duplicates
-    keys = [...new Set([...baseKeys, ...keys])];
+  // Merge environment hierarchy keys if enabled
+  if (getSettings().environment.use_hierarchy) {
+    const keys = getEnvHierarchy(activeEnvPath)
+        .flatMap(envPath => envData[envPath] ? Object.keys(envData[envPath]) : []);
+    return Array.from(new Set(keys));
+  } else {
+    return Object.keys(envData[activeEnvPath]);
   }
-  return keys;
 });
 
 // Simple handler to extend all .env files
