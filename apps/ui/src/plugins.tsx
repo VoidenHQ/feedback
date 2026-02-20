@@ -146,10 +146,14 @@ export const useEditorEnhancementStore = create<EditorEnhancementStore>((set) =>
 const exposedHelpers: Record<string, PluginHelpers> = {};
 
 // Global registry for linkable node types (for external file linking)
-const linkableNodeTypes = new Set<string>();
+// Core node types that are always linkable (not owned by any plugin)
+const coreLinkableNodeTypes = ['runtime-variables'];
+const coreNodeDisplayNames: Record<string, string> = { 'runtime-variables': 'Runtime Variables' };
+
+const linkableNodeTypes = new Set<string>(coreLinkableNodeTypes);
 
 // Global registry for node display names (for showing human-readable names in UI)
-const nodeDisplayNames = new Map<string, string>();
+const nodeDisplayNames = new Map<string, string>(Object.entries(coreNodeDisplayNames));
 
 // Global registry for loaded plugin instances (for cleanup)
 const loadedPlugins: Map<string, { onload: () => Promise<void>; onunload: () => Promise<void> }> = new Map();
@@ -478,7 +482,9 @@ export const getPlugins = async () => {
   });
   Object.keys(exposedHelpers).forEach(key => delete exposedHelpers[key]);
   linkableNodeTypes.clear(); // Clear linkable node types on plugin reload
+  coreLinkableNodeTypes.forEach(type => linkableNodeTypes.add(type)); // Re-seed core linkable types
   nodeDisplayNames.clear(); // Clear node display names on plugin reload
+  Object.entries(coreNodeDisplayNames).forEach(([type, name]) => nodeDisplayNames.set(type, name)); // Re-seed core display names
   requestOrchestrator.clear();
   pasteOrchestrator.clear();
 
