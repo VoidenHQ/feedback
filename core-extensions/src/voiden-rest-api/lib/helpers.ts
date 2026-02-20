@@ -6,6 +6,7 @@
  */
 
 import { JSONContent, generateJSON } from "@tiptap/core";
+import YAML from "yaml";
 import {
   convertToMethodNode,
   convertToURLNode,
@@ -113,44 +114,6 @@ export async function convertToVoidMarkdown(jsonContent: JSONContent): Promise<s
   return await converter(jsonContent);
 }
 
-/**
- * Convert JSON content to YAML string for void blocks
- */
-function jsonToYaml(obj: any, indent = 0): string {
-  const spaces = '  '.repeat(indent);
-  let yaml = '';
-
-  if (Array.isArray(obj)) {
-    obj.forEach(item => {
-      yaml += `${spaces}- `;
-      if (typeof item === 'object' && item !== null) {
-        const itemYaml = jsonToYaml(item, indent + 1);
-        yaml += itemYaml.substring((indent + 1) * 2);
-      } else {
-        yaml += `${item}\n`;
-      }
-    });
-  } else if (typeof obj === 'object' && obj !== null) {
-    Object.entries(obj).forEach(([key, value]) => {
-      if (value === undefined) return;
-
-      if (typeof value === 'object' && value !== null) {
-        yaml += `${spaces}${key}:\n`;
-        yaml += jsonToYaml(value, indent + 1);
-      } else if (typeof value === 'string' && value.includes('\n')) {
-        // Multi-line string
-        yaml += `${spaces}${key}: |-\n`;
-        value.split('\n').forEach(line => {
-          yaml += `${spaces}  ${line}\n`;
-        });
-      } else {
-        yaml += `${spaces}${key}: ${key==='text'?`"${value}"`:value}\n`;
-      }
-    });
-  }
-
-  return yaml;
-}
 
 /**
  * Generate a UUID v4
@@ -250,7 +213,9 @@ export function convertBlocksToVoidFile(title: string, blocks: JSONContent[]): s
 
       voidContent += '```void\n';
       voidContent += '---\n';
-      voidContent += jsonToYaml(blockWithUID, 0);
+      voidContent += YAML.stringify(blockWithUID, {
+        lineWidth: 0,
+      });
       voidContent += '---\n';
       voidContent += '```\n\n';
     }
